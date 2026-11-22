@@ -1,0 +1,123 @@
+/* =========================================================
+   ZONEPULSE 1v4 — ARCADE GAME UI THEME (v6)
+   Inspired by 40507.jpg structure, crafted as an original game UI
+   ========================================================= */
+
+:root {
+  --bg-top: #154c54;
+  --bg-bot: #0c2b33;
+  --ink: #10161c;
+  --panel-dark: #142630;
+  --panel-mid: #1d3644;
+  --card-cream: #f4ecd8;
+
+  --gold: #f5b727;
+  --gold-hi: #ffe07d;
+  --gold-lo: #b57708;
+
+  --green: #48b838;
+  --green-hi: #83e66c;
+  --green-lo: #24751c;
+
+  --cyan: #1bb3c8;
+  --cyan-hi: #6ce8f7;
+  --cyan-lo: #0d6d7d;
+
+  --blue: #2d7be0;
+  --blue-hi: #72b3ff;
+  --blue-lo: #164894;
+
+  --red: #de3b3b;
+  --red-hi: #ff7c7c;
+  --red-lo: #8c1919;
+
+  --text-light: #f8fafc;
+  --text-sub: #a8c7d1;
+  --font-display: "Press Start 2P", "Trebuchet MS", "Arial Black", sans-serif;
+  --font-ui: "Silkscreen", "Trebuchet MS", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; background: var(--bg-bot); color: var(--text-light); font-family: var(--font-ui); overflow-x: hidden; line-height: 1.35; }
+
+.arena-bg {
+  background-color: var(--bg-bot);
+  background-image:
+    radial-gradient(circle at 50% 12%, rgba(27, 179, 200, 0.28), transparent 52%),
+    radial-gradient(circle at 50% 65%, rgba(245, 183, 39, 0.14), transparent 55%),
+    linear-gradient(180deg, #17545c 0%, #0f3640 55%, #092129 100%);
+  position: relative;
+}
+.arena-bg::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.08;
+  background-image:
+    repeating-linear-gradient(45deg, #ffe07d 0 2px, transparent 2px 28px),
+    repeating-linear-gradient(-45deg, #6ce8f7 0 2px, transparent 2px 28px);
+}
+
+.screen-wrap {
+  width: 100%; max-width: 460px; min-height: 100dvh; margin: 0 auto;
+  padding: 10px 12px 18px; display: flex; flex-direction: column; gap: 10px;
+  position: relative; z-index: 2;
+}
+
+.g-panel {
+  background: var(--panel-dark); border: 3px solid var(--ink); border-radius: 14px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.14), inset 0 -3px 0 rgba(0,0,0,0.45), 0 4px 0 var(--ink);
+}
+.g-card-warm {
+  background: linear-gradient(180deg, #e7c892 0%, #cfa463 100%); color: var(--ink);
+  border: 3px solid var(--ink); border-radius: 16px;
+  box-shadow: inset 0 3px 0 #fff1cf, inset 0 -4px 0 #9c7238, 0 5px 0 var(--ink);
+}
+
+.g-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-display); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: #ffffff; text-shadow: 0 2px 0 rgba(16,22,28,0.85);
+  border: 3px solid var(--ink); border-radius: 14px; padding: 13px 12px;
+  cursor: pointer; user-select: none; transition: transform 0.08s ease;
+}
+.g-btn:active { transform: translateY(3px); }
+.g-btn-green { background: linear-gradient(180deg, var(--green-hi) 0%, var(--green) 22%, var(--green-lo) 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 5px 0 var(--ink); }
+.g-btn-gold  { background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 22%, var(--gold-lo) 100%); color: #1c1200; text-shadow: 0 1px 0 rgba(255,255,255,0.5); box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 5px 0 var(--ink); }
+.g-btn-cyan  { background: linear-gradient(180deg, var(--cyan-hi) 0%, var(--cyan) 22%, var(--cyan-lo) 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 5px 0 var(--ink); }
+.g-btn-blue  { background: linear-gradient(180deg, var(--blue-hi) 0%, var(--blue) 22%, var(--blue-lo) 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 5px 0 var(--ink); }
+.g-btn-red   { background: linear-gradient(180deg, var(--red-hi) 0%, var(--red) 22%, var(--red-lo) 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 5px 0 var(--ink); }
+.g-btn-dark  { background: linear-gradient(180deg, #324c5c 0%, #203440 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.16), 0 4px 0 var(--ink); }
+
+.g-btn-sm { font-size: 9px; padding: 9px 10px; border-radius: 11px; }
+.g-btn-lg { font-size: 13px; padding: 15px 14px; border-radius: 16px; }
+
+.g-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #0e1c24; color: #ffe07d;
+  border: 2.5px solid var(--ink); border-radius: 999px;
+  padding: 4px 10px; font-family: var(--font-display); font-size: 8.5px;
+}
+
+.g-input {
+  width: 100%; background: #0c171e; color: #ffe07d;
+  border: 3px solid var(--ink); border-radius: 11px;
+  padding: 12px; font-family: var(--font-display); font-size: 12px;
+  outline: none; user-select: text;
+}
+.g-input:focus { border-color: var(--gold); }
+
+.g-modal-bg {
+  position: fixed; inset: 0; background: rgba(6, 14, 20, 0.84);
+  display: none; align-items: center; justify-content: center;
+  padding: 16px; z-index: 2000;
+}
+.g-modal-bg.active { display: flex; }
+.g-modal-card { width: 100%; max-width: 380px; max-height: 86dvh; overflow-y: auto; padding: 16px; }
+
+.g-toast {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-85px);
+  background: #102029; color: #ffe07d; border: 3px solid var(--ink); border-radius: 12px;
+  box-shadow: 0 4px 0 var(--ink); padding: 9px 14px;
+  font-family: var(--font-display); font-size: 9px; z-index: 5000;
+  transition: transform 0.2s ease; pointer-events: none; white-space: nowrap;
+}
+.g-toast.show { transform: translateX(-50%) translateY(0); }
+.px-icon { width: 18px; height: 18px; display: inline-block; flex-shrink: 0; image-rendering: pixelated; }
