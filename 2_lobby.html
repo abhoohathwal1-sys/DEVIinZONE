@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>2. DEVILinZONE — Lobby</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="css/arcade.css" />
+  <style>
+    .top-strip { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .mini-stat {
+      background: #0e1c24; border: 2.5px solid var(--ink); border-radius: 999px;
+      padding: 5px 10px; font-family: var(--font-display); font-size: 8px; color: #ffe07d;
+    }
+    .header-grid { display: grid; grid-template-columns: 1.25fr 0.95fr; gap: 8px; }
+    .profile-box { padding: 8px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .avatar-frame { background: #0d1920; border: 2.5px solid var(--gold); border-radius: 10px; padding: 2px; flex-shrink: 0; }
+    .arena-box { padding: 8px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+
+    .spotlight-banner {
+      background: linear-gradient(180deg, #ffe07d 0%, #f5b727 55%, #c7850a 100%);
+      border: 3px solid var(--ink); border-radius: 14px;
+      box-shadow: inset 0 2px 0 #fff7cc, 0 4px 0 var(--ink);
+      padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      color: #1a1100; cursor: pointer;
+    }
+    .stage-box {
+      padding: 12px 10px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      background: linear-gradient(180deg, #1b4d57 0%, #11323b 100%);
+    }
+    .lineup-row {
+      width: 100%; min-height: 92px; display: flex; align-items: flex-end; justify-content: space-around;
+      padding: 8px 6px 6px; background: rgba(9, 24, 30, 0.55);
+      border: 2.5px solid var(--ink); border-radius: 12px;
+    }
+    .char-slot-unit { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .char-slot-tag {
+      font-family: var(--font-display); font-size: 7px; background: #0c171e; color: #ffe07d;
+      padding: 2px 4px; border-radius: 5px; border: 1.5px solid var(--ink);
+    }
+
+    .dual-action { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .mode-big-btn { flex-direction: column; padding: 15px 10px; gap: 6px; border-radius: 15px; }
+
+    .choice-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 7px; }
+    .c-btn {
+      font-family: var(--font-display); font-size: 8px; padding: 9px 2px;
+      background: #0e1c24; color: #a8c7d1; border: 2.5px solid var(--ink);
+      border-radius: 9px; cursor: pointer;
+    }
+    .c-btn.active { background: var(--green); color: #fff; }
+
+    .safety-strip {
+      background: rgba(14, 28, 36, 0.85); border: 2px solid #2c4a59; border-radius: 10px;
+      padding: 7px 10px; font-size: 10px; color: #a8c7d1; text-align: center;
+    }
+
+    .bottom-dock {
+      margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px;
+    }
+  </style>
+</head>
+<body class="arena-bg">
+  <div class="screen-wrap">
+    <!-- Top Status + Compact Small DEMO Button! -->
+    <div class="top-strip">
+      <div class="mini-stat" id="fb-status">REAL PLAY READY</div>
+      <div class="mini-stat" id="top-cfg-chip">3-8P • 15m</div>
+      <button class="g-btn g-btn-dark g-btn-sm" id="btn-small-demo" style="padding:5px 9px; font-size:8px; border-radius:999px;">
+        DEMO
+      </button>
+    </div>
+
+    <!-- Player Profile + Hero Skin -->
+    <div class="header-grid">
+      <div class="g-panel profile-box" id="btn-profile">
+        <div class="avatar-frame" id="my-avatar"></div>
+        <div style="min-width:0;">
+          <div style="font-family:var(--font-display); font-size:9.5px; color:#ffe07d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="player-name-lbl">PLAYER1</div>
+          <div style="font-size:10px; color:#83e66c; margin-top:3px;">TAP TO RENAME</div>
+        </div>
+      </div>
+
+      <div class="g-panel arena-box" id="btn-swap-hero">
+        <div style="font-family:var(--font-display); font-size:8px; color:#6ce8f7;">HERO SKIN</div>
+        <div style="font-size:11px; color:#fff; font-weight:700; margin-top:3px;" id="hero-num-lbl">HERO #1 • TAP</div>
+      </div>
+    </div>
+
+    <!-- Highlighted Banner -->
+    <div class="spotlight-banner" id="btn-rules">
+      <div>
+        <div style="font-family:var(--font-display); font-size:10.5px;">HATHWAL • DEVILinZONE</div>
+        <div style="font-size:10.5px; font-weight:700;">Real-Life 3–8 Players • 8s Radar Ping • Gadgets</div>
+      </div>
+      <span class="g-pill" style="background:#142630; color:#83e66c;">RULES</span>
+    </div>
+
+    <!-- Squad Stage -->
+    <div class="g-panel stage-box">
+      <div style="width:100%; display:flex; justify-content:space-between;">
+        <span class="g-pill">REAL-WORLD ARENA</span>
+        <span class="g-pill" style="color:#83e66c;">1 DEVIL vs TEAM</span>
+      </div>
+      <div class="lineup-row" id="lineup-row"></div>
+    </div>
+
+    <!-- PRIMARY REAL-PLAY ACTIONS: CREATE ROOM & JOIN ROOM -->
+    <div class="dual-action">
+      <button class="g-btn g-btn-green mode-big-btn" id="btn-create">
+        <span id="ico-flask"></span>
+        <span>CREATE ROOM</span>
+        <span style="font-size:7.5px; opacity:0.9;">HOST MATCH</span>
+      </button>
+      <button class="g-btn g-btn-cyan mode-big-btn" id="btn-join">
+        <span id="ico-gps"></span>
+        <span>JOIN ROOM</span>
+        <span style="font-size:7.5px; opacity:0.9;">ENTER CODE</span>
+      </button>
+    </div>
+
+    <!-- Real-World Safety Notice (Checklist #9) -->
+    <div class="safety-strip">
+      SAFE PLAY: High-traffic roads, deep water aur private property se door rahein.
+    </div>
+
+    <!-- Bottom Dock -->
+    <div class="bottom-dock">
+      <button class="g-btn g-btn-dark g-btn-sm" style="flex:1;" onclick="window.location.href='1_start_animation.html'">TITLE POSTER</button>
+      <button class="g-btn g-btn-gold g-btn-sm" style="flex:1;" id="btn-rules-2">GADGETS &amp; RULES</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Edit Player Name -->
+  <div class="g-modal-bg" id="m-name">
+    <div class="g-panel g-modal-card">
+      <div style="font-family:var(--font-display); font-size:11px; color:#ffe07d; margin-bottom:10px;">PLAYER NAME</div>
+      <input type="text" class="g-input" id="in-name" maxlength="12" placeholder="ANKIT" />
+      <div class="dual-action" style="margin-top:12px;">
+        <button class="g-btn g-btn-dark g-btn-sm" onclick="closeModals()">BACK</button>
+        <button class="g-btn g-btn-green g-btn-sm" id="save-name">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Room (Flexible 3-8 Players + 10/15/30/40m Quick/Full Modes, Checklist #6) -->
+  <div class="g-modal-bg" id="m-create">
+    <div class="g-panel g-modal-card">
+      <div style="font-family:var(--font-display); font-size:11px; color:#83e66c; margin-bottom:10px;">HOST REAL MATCH</div>
+
+      <div style="font-size:10.5px; color:#a8c7d1;">MATCH TIME (QUICK OR FULL)</div>
+      <div class="choice-4" id="dur-4">
+        <button class="c-btn" data-v="10">10m</button>
+        <button class="c-btn active" data-v="15">15m</button>
+        <button class="c-btn" data-v="30">30m</button>
+        <button class="c-btn" data-v="40">40m</button>
+      </div>
+
+      <div style="font-size:10.5px; color:#a8c7d1; margin-top:12px;">PLAYERS LIMIT (3 TO 8)</div>
+      <div class="choice-4" id="plr-4">
+        <button class="c-btn" data-v="3">3P</button>
+        <button class="c-btn active" data-v="5">5P</button>
+        <button class="c-btn" data-v="6">6P</button>
+        <button class="c-btn" data-v="8">8P</button>
+      </div>
+
+      <div style="font-size:10.5px; color:#a8c7d1; margin-top:12px;">
+        START ZONE: <span id="rad-lbl" style="color:#ffe07d;">150m</span>
+      </div>
+      <input type="range" id="in-rad" min="100" max="260" step="10" value="150" style="width:100%; margin-top:6px; accent-color:#48b838;" />
+
+      <div class="dual-action" style="margin-top:14px;">
+        <button class="g-btn g-btn-dark g-btn-sm" onclick="closeModals()">CANCEL</button>
+        <button class="g-btn g-btn-green g-btn-sm" id="go-create">CREATE ROOM</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Join Room -->
+  <div class="g-modal-bg" id="m-join">
+    <div class="g-panel g-modal-card">
+      <div style="font-family:var(--font-display); font-size:11px; color:#6ce8f7; margin-bottom:10px;">JOIN FRIEND'S ROOM</div>
+      <input type="tel" maxlength="4" class="g-input" id="in-code" placeholder="4829" style="text-align:center; font-size:18px; letter-spacing:6px;" />
+      <div class="dual-action" style="margin-top:12px;">
+        <button class="g-btn g-btn-dark g-btn-sm" onclick="closeModals()">CANCEL</button>
+        <button class="g-btn g-btn-cyan g-btn-sm" id="go-join">JOIN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Rules & Gadgets -->
+  <div class="g-modal-bg" id="m-rules">
+    <div class="g-card-warm g-modal-card">
+      <div style="font-family:var(--font-display); font-size:11px; color:#10161c; margin-bottom:10px;">RULES &amp; GADGETS</div>
+      <div style="font-size:11.5px; font-weight:700; display:flex; flex-direction:column; gap:7px;">
+        <div>1. 3–8 Players: Bottle spins -> 1 Random DEVIL. 60s Hide / Stay timer.</div>
+        <div>2. 8s Radar Ping: Har 3m par sirf 8s ka radar ping (fair stealth!).</div>
+        <div>3. Gadgets: Hiders (Ghost Cloak, Decoy Ping, Radar Alert) • Devil (Quick Scan, Zone Lock, Catch + Dispute Tag).</div>
+        <div>4. Ghost Helper: Out hone ke baad Spectator view + teammate ko Danger Ping bhej sakte ho!</div>
+        <div>5. Safety: 20s GPS drift grace timer, Battery Saver Pocket Mode &amp; No-Go road/water alerts.</div>
+      </div>
+      <button class="g-btn g-btn-green g-btn-sm" style="width:100%; margin-top:12px;" onclick="closeModals()">GOT IT</button>
+    </div>
+  </div>
+
+  <script src="js/firebase_config.js"></script>
+  <script src="js/firebase_sync.js"></script>
+  <script src="js/pixel_art.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/state.js"></script>
+  <script>
+    const A = window.ZP_ART;
+    document.getElementById("ico-flask").innerHTML = A.icons.flask;
+    document.getElementById("ico-gps").innerHTML = A.icons.gps;
+
+    let state = window.ZP_STATE.load();
+    let chosenDur = state.durationMin || 15;
+    let chosenMaxP = state.maxPlayers || 5;
+
+    window.ZP_SYNC.init(ok => {
+      document.getElementById("fb-status").textContent = ok ? "FIREBASE LIVE" : "REAL PLAY (LOCAL)";
+    });
+
+    window.closeModals = function () {
+      document.querySelectorAll(".g-modal-bg").forEach(m => m.classList.remove("active"));
+    };
+    function openModal(id) { window.ZP_AUDIO.click(); document.getElementById(id).classList.add("active"); }
+
+    function syncUI() {
+      state = window.ZP_STATE.load();
+      closeModals();
+      const idx = state.mySpriteIdx || 0;
+      document.getElementById("player-name-lbl").textContent = state.playerName;
+      document.getElementById("in-name").value = state.playerName;
+      document.getElementById("hero-num-lbl").textContent = `HERO #${idx + 1} • TAP`;
+      document.getElementById("top-cfg-chip").textContent = `3-8P • ${state.durationMin || 15}m`;
+      document.getElementById("my-avatar").innerHTML = A.charIMG("me", 34, idx);
+
+      const lineup = document.getElementById("lineup-row");
+      lineup.innerHTML = "";
+      [
+        { type: "me", s: (idx + 1) % 6, h: 42, tag: "P2" },
+        { type: "me", s: (idx + 2) % 6, h: 44, tag: "P3" },
+        { type: "devil", s: 0, h: 58, tag: "DEVIL?" },
+        { type: "me", s: idx, h: 48, tag: "YOU" },
+        { type: "me", s: (idx + 3) % 6, h: 42, tag: "P4+" }
+      ].forEach(item => {
+        const u = document.createElement("div");
+        u.className = "char-slot-unit";
+        u.innerHTML = `${A.charIMG(item.type, item.h, item.s)}<span class="char-slot-tag">${item.tag}</span>`;
+        lineup.appendChild(u);
+      });
+    }
+
+    document.getElementById("btn-swap-hero").onclick = () => {
+      window.ZP_AUDIO.click();
+      state.mySpriteIdx = ((state.mySpriteIdx || 0) + 1) % 6;
+      if (state.players[0]) state.players[0].spriteIdx = state.mySpriteIdx;
+      window.ZP_STATE.save(state);
+      syncUI();
+    };
+
+    document.getElementById("btn-profile").onclick = () => openModal("m-name");
+    document.getElementById("btn-rules").onclick = () => openModal("m-rules");
+    document.getElementById("btn-rules-2").onclick = () => openModal("m-rules");
+    document.getElementById("btn-create").onclick = () => openModal("m-create");
+    document.getElementById("btn-join").onclick = () => openModal("m-join");
+
+    document.getElementById("save-name").onclick = () => {
+      const v = document.getElementById("in-name").value.trim().toUpperCase();
+      if (!v) return;
+      state.playerName = v;
+      if (state.players[0]) state.players[0].name = v;
+      window.ZP_STATE.save(state);
+      syncUI();
+      window.ZP_STATE.showToast("SAVED: " + v);
+    };
+
+    // SMALL DEMO BUTTON: Launches local 5-bot demo cleanly!
+    document.getElementById("btn-small-demo").onclick = () => {
+      window.ZP_AUDIO.click();
+      state.demoMode = true;
+      state.fastTimers = true;
+      state.isHost = true;
+      state.maxPlayers = 5;
+      state.roomCode = window.ZP_STATE.randCode(4);
+      state.roleMode = "random";
+      state.players = [{
+        id: "me", name: state.playerName, isBot: false, isHost: true, role: "pending",
+        catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
+      }];
+      window.ZP_STATE.fillBotsToTarget(state, 5);
+      window.location.href = "3_room_lobby.html";
+    };
+
+    document.querySelectorAll("#dur-4 .c-btn").forEach(b => {
+      b.onclick = () => {
+        window.ZP_AUDIO.click();
+        document.querySelectorAll("#dur-4 .c-btn").forEach(x => x.classList.remove("active"));
+        b.classList.add("active");
+        chosenDur = parseInt(b.dataset.v, 10);
+      };
+    });
+    document.querySelectorAll("#plr-4 .c-btn").forEach(b => {
+      b.onclick = () => {
+        window.ZP_AUDIO.click();
+        document.querySelectorAll("#plr-4 .c-btn").forEach(x => x.classList.remove("active"));
+        b.classList.add("active");
+        chosenMaxP = parseInt(b.dataset.v, 10);
+      };
+    });
+    const rad = document.getElementById("in-rad");
+    rad.oninput = () => { document.getElementById("rad-lbl").textContent = rad.value + "m"; };
+
+    // REAL PLAY: CREATE LIVE FIREBASE ROOM
+    document.getElementById("go-create").onclick = () => {
+      window.ZP_AUDIO.click();
+      state.demoMode = false;
+      state.fastTimers = false;
+      state.isHost = true;
+      state.roomCode = window.ZP_STATE.randCode(4);
+      state.durationMin = chosenDur;
+      state.maxPlayers = chosenMaxP;
+      state.startRadius = parseInt(rad.value, 10);
+      state.roleMode = "random";
+      const meObj = {
+        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: true, role: "pending",
+        catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
+      };
+      state.players = [meObj];
+      window.ZP_STATE.save(state);
+      if (window.ZP_SYNC.isEnabled()) {
+        window.ZP_STATE.showToast("CREATING LIVE ROOM #" + state.roomCode + "...");
+        window.ZP_SYNC.createRoom(state.roomCode, state, meObj, (ok) => {
+          window.location.href = "3_room_lobby.html";
+        });
+      } else {
+        window.location.href = "3_room_lobby.html";
+      }
+    };
+
+    // REAL PLAY: JOIN LIVE FIREBASE ROOM
+    document.getElementById("go-join").onclick = () => {
+      const code = document.getElementById("in-code").value.trim();
+      if (code.length < 4) { window.ZP_STATE.showToast("ENTER 4-DIGIT CODE!"); return; }
+      window.ZP_AUDIO.click();
+      state.demoMode = false;
+      state.fastTimers = false;
+      state.isHost = false;
+      state.roomCode = code;
+      state.roleMode = "random";
+      const meObj = {
+        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: false, role: "pending",
+        catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
+      };
+      state.players = [meObj];
+      window.ZP_STATE.save(state);
+      if (window.ZP_SYNC.isEnabled()) {
+        window.ZP_STATE.showToast("JOINING ROOM #" + code + "...");
+        window.ZP_SYNC.joinRoomAsPlayer(code, meObj, (ok, info) => {
+          if (!ok) { window.ZP_STATE.showToast(info || "COULD NOT JOIN!"); return; }
+          window.location.href = "3_room_lobby.html";
+        });
+      } else {
+        window.location.href = "3_room_lobby.html";
+      }
+    };
+
+    window.addEventListener("pageshow", syncUI);
+  </script>
+</body>
+</html>

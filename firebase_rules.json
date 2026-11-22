@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomCode": {
+        ".read": true,
+        ".write": true,
+        "meta": {
+          ".validate": "newData.hasChildren(['hostId', 'status', 'durationMin', 'maxPlayers'])"
+        },
+        "players": {
+          "$playerId": {
+            ".validate": "newData.hasChildren(['name', 'role', 'alive'])"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>4. DEVILinZONE — Live Arena</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="css/arcade.css" />
+  <style>
+    body { overflow: hidden; background: #0d1712; }
+    .game-root { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #0d1712; }
+
+    /* STEP 1: CHEMICAL BOTTLE INTRO */
+    #intro-stage { position: fixed; inset: 0; z-index: 90; background: #1b3822; display: flex; flex-direction: column; }
+    #intro-stage.hidden { display: none; }
+    #intro-canvas { width: 100%; height: 100%; display: block; }
+    .skip-intro-btn { position: absolute; bottom: 20px; right: 14px; z-index: 95; }
+
+    /* MAPLIBRE 3D VECTOR MAP */
+    #map { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 1; background: #0d1712; }
+    #retro-canvas { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 1; display: none; background: #4ea84e; }
+
+    /* CHARACTER MARKERS */
+    .rpg-marker { display: flex; flex-direction: column; align-items: center; pointer-events: none; transform-origin: bottom center; }
+    .rpg-sprite-wrap { position: relative; display: flex; align-items: flex-end; justify-content: center; }
+    .rpg-shadow { position: absolute; bottom: -2px; width: 72%; height: 7px; background: rgba(0,0,0,0.45); border-radius: 50%; }
+    .rpg-marker img { position: relative; z-index: 2; width: auto; display: block; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.75)); }
+    .rpg-marker.devil img { filter: drop-shadow(0 0 8px rgba(239,68,68,0.95)) drop-shadow(0 2px 0 #111); }
+    .rpg-name {
+      margin-top: 2px; background: rgba(12,15,18,0.92); color: #fff;
+      font-family: var(--font-display); font-size: 7px; padding: 2px 5px;
+      border: 1.5px solid #ffe07d; border-radius: 4px; white-space: nowrap;
+    }
+    .rpg-marker.devil .rpg-name { border-color: #ff4d4d; color: #ff8585; }
+    .rpg-marker.me .rpg-name { border-color: #83e66c; color: #b8ff9c; }
+
+    .zone-danger-frame { position: fixed; inset: 0; pointer-events: none; z-index: 18; border: 0px solid #ef4444; }
+    .zone-danger-frame.danger { border-width: 8px; box-shadow: inset 0 0 40px rgba(239,68,68,0.75); }
+
+    /* CLEAN UNIFIED TOP BAR (Inspired by 40589.png / 40591.png) */
+    .hud-top {
+      position: fixed; top: 8px; left: 8px; right: 8px; z-index: 30;
+      display: flex; flex-direction: column; gap: 5px; pointer-events: none;
+      max-width: 480px; margin: 0 auto;
+    }
+    .unified-bar {
+      pointer-events: auto;
+      background: rgba(18, 24, 30, 0.94); border: 2.5px solid #0c0f12; border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+      padding: 7px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .u-cell { display: flex; flex-direction: column; align-items: center; }
+    .u-k { font-size: 7.5px; color: #94a8b8; font-family: var(--font-display); }
+    .u-v { font-size: 12px; color: #fff; font-family: var(--font-display); margin-top: 2px; }
+
+    .sub-strip {
+      pointer-events: auto; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      background: rgba(18, 24, 30, 0.88); border: 2px solid #0c0f12; border-radius: 10px;
+      padding: 5px 10px; font-family: var(--font-display); font-size: 7.5px; color: #72b3ff;
+    }
+    .sub-strip.reveal { background: #9c1b1b; color: #fff; border-color: #ffe07d; }
+    .sub-strip.expanding { background: #194d26; color: #83e66c; }
+    .sub-strip.shrinking { background: #5c2710; color: #ffc178; }
+    .sub-strip.center-shift { background: #4d3c0a; color: #ffe07d; }
+
+    .alert-pill {
+      display: none; align-self: center; background: #c92a2a; border: 2.5px solid #0c0f12;
+      border-radius: 10px; padding: 6px 12px; font-family: var(--font-display); font-size: 8.5px; color: #fff;
+    }
+    .alert-pill.show { display: block; }
+    .nogo-pill { background: #b45309; color: #fef3c7; }
+
+    .hide60-bar {
+      display: none; pointer-events: auto; background: #2d7a22; border: 2.5px solid #0c0f12;
+      border-radius: 11px; padding: 7px 10px; align-items: center; justify-content: space-between; gap: 8px;
+      font-family: var(--font-display); font-size: 8.5px; color: #fff;
+    }
+    .hide60-bar.show { display: flex; }
+
+    .ghost-bar {
+      display: none; pointer-events: auto; background: #3b1c5c; border: 2.5px solid #c084fc;
+      border-radius: 11px; padding: 7px 10px; align-items: center; justify-content: space-between; gap: 8px;
+      font-family: var(--font-display); font-size: 8px; color: #f3e8ff;
+    }
+    .ghost-bar.show { display: flex; }
+
+    .event-feed {
+      position: fixed; top: 145px; left: 8px; z-index: 26;
+      display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: 72vw;
+    }
+    .ev-item {
+      background: rgba(16, 24, 32, 0.92); border: 2px solid #0c0f12; border-left: 4px solid #f5b727;
+      border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 700; color: #fff;
+    }
+
+    /* Right Compact Side Tools */
+    .mini-tools { position: fixed; right: 8px; top: 145px; z-index: 30; display: flex; flex-direction: column; gap: 6px; }
+    .mini-btn { width: 38px; height: 38px; padding: 0; border-radius: 11px; font-size: 10px; }
+
+    /* BOTTOM GADGET DOCK (Inspired by 40589.png — 3 Clean Action Cards!) */
+    .hud-bottom {
+      position: fixed; left: 8px; right: 8px; bottom: 10px; z-index: 30;
+      display: flex; flex-direction: column; gap: 7px; pointer-events: none;
+      max-width: 480px; margin: 0 auto;
+    }
+    .demo-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+
+    .dpad {
+      pointer-events: auto; display: grid; grid-template-columns: repeat(3, 35px); grid-template-rows: repeat(3, 35px);
+      gap: 3px; background: rgba(18,24,30,0.9); border: 2.5px solid #0c0f12; border-radius: 12px; padding: 4px;
+    }
+    .dpad.hidden { display: none; }
+    .d-key {
+      background: #2b3c4a; color: #fff; border: 1.5px solid #0c0f12; border-radius: 6px;
+      font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; touch-action: none;
+    }
+    .d-key.pressed, .d-key:active { background: #48b838; }
+
+    .gadget-dock {
+      pointer-events: auto;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
+    }
+    .gadget-card {
+      background: rgba(18, 24, 30, 0.94); border: 2.5px solid #0c0f12; border-radius: 14px;
+      box-shadow: 0 4px 0 #0c0f12; padding: 9px 6px;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: #fff; cursor: pointer; font-family: var(--font-display);
+    }
+    .gadget-card:active { transform: translateY(2px); }
+    .gadget-card.disabled { opacity: 0.45; }
+    .gadget-card .g-name { font-size: 8.5px; color: #6ce8f7; }
+    .gadget-card.red .g-name { color: #ff7c7c; }
+    .gadget-card.gold .g-name { color: #ffe07d; }
+    .gadget-card .g-sub { font-size: 7px; color: #94a8b8; }
+
+    /* DEVIL 60s STAY SCREEN */
+    .devil-stay-screen {
+      position: fixed; inset: 0; background: #24090c; z-index: 65;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px; gap: 14px;
+    }
+    .devil-stay-screen.show { display: flex; }
+
+    /* BATTERY SAVER / POCKET MODE OVERLAY (Checklist #8) */
+    .pocket-screen {
+      position: fixed; inset: 0; background: #000000; z-index: 4000;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px; gap: 12px; color: #52626e;
+    }
+    .pocket-screen.show { display: flex; }
+
+    /* RESULT SCREEN (ZERO FREEZE) */
+    .result-screen {
+      position: fixed; inset: 0; background: rgba(10, 14, 18, 0.94); z-index: 3000;
+      display: none; align-items: center; justify-content: center; padding: 18px; touch-action: auto;
+    }
+    .result-screen.show { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="game-root">
+    <div id="intro-stage">
+      <canvas id="intro-canvas"></canvas>
+      <button class="g-btn g-btn-dark g-btn-sm skip-intro-btn" id="btn-skip-intro">SKIP</button>
+    </div>
+
+    <div id="map"></div>
+    <canvas id="retro-canvas"></canvas>
+    <div class="zone-danger-frame" id="danger-frame"></div>
+
+    <!-- CLEAN UNIFIED TOP BAR (40589.png Inspired) -->
+    <div class="hud-top">
+      <div class="unified-bar">
+        <div class="u-cell">
+          <span class="u-k" id="my-role-lbl">ROLE</span>
+          <span class="u-v" id="gps-mini" style="font-size:8.5px; color:#83e66c;">GPS...</span>
+        </div>
+        <div class="u-cell">
+          <span class="u-k">GAME</span>
+          <span class="u-v" id="match-timer">15:00</span>
+        </div>
+        <div class="u-cell">
+          <span class="u-k" id="radar-k">NEXT PING</span>
+          <span class="u-v" id="radar-cd" style="color:#ffe07d;">03:00</span>
+        </div>
+        <div class="u-cell">
+          <span class="u-k">ALIVE</span>
+          <span class="u-v" id="alive-count" style="color:#83e66c;">4</span>
+        </div>
+      </div>
+
+      <div class="sub-strip" id="zone-strip">
+        <span id="zone-txt">ZONE 150m • EXPANDS 2 LEFT</span>
+        <span id="ctr-txt" style="color:#ffe07d;">CTR 10:00</span>
+      </div>
+
+      <div class="hide60-bar" id="hide60-bar">
+        <span>HIDE YOURSELF: <span id="hider-60s">60</span>s</span>
+        <button class="g-btn g-btn-dark g-btn-sm" id="skip-hider60" style="padding:4px 8px; font-size:7.5px;">SKIP</button>
+      </div>
+
+      <!-- Post-Elimination Ghost Helper Bar (Checklist #4) -->
+      <div class="ghost-bar" id="ghost-bar">
+        <span>GHOST SPECTATOR MODE</span>
+        <button class="g-btn g-btn-gold g-btn-sm" id="btn-ghost-ping" style="padding:4px 8px; font-size:7.5px;">WARN TEAM!</button>
+      </div>
+
+      <!-- 20s GPS Drift Grace Timer (Checklist #7) -->
+      <div class="alert-pill" id="out-alert">OUTSIDE ZONE! RETURN IN <span id="grace-sec">20</span>s</div>
+
+      <!-- No-Go Road/Water Safety Alert (Checklist #9) -->
+      <div class="alert-pill nogo-pill" id="nogo-alert">SAFETY ALERT: NEAR ROAD / WATER!</div>
+    </div>
+
+    <div class="event-feed" id="event-feed"></div>
+
+    <!-- Side Tools: Pocket Battery Saver, 3D Toggle, Recenter, Exit -->
+    <div class="mini-tools">
+      <button class="g-btn g-btn-dark mini-btn" id="btn-pocket" title="Battery Saver Pocket Mode">BAT</button>
+      <button class="g-btn g-btn-dark mini-btn" id="btn-3d" title="3D / 2D View">3D</button>
+      <button class="g-btn g-btn-dark mini-btn" id="btn-recenter" title="My Location"></button>
+      <button class="g-btn g-btn-red mini-btn" id="btn-exit" title="Exit"></button>
+    </div>
+
+    <!-- BOTTOM DOCK: Optional Demo Pad + 3 Role Gadgets (40589.png style) -->
+    <div class="hud-bottom">
+      <div class="demo-row">
+        <div class="dpad" id="dpad">
+          <div></div><button class="d-key" data-dir="up">▲</button><div></div>
+          <button class="d-key" data-dir="left">◀</button><div class="d-key" style="font-size:7px;color:#ffe07d;" id="dpad-tag">PAD</div><button class="d-key" data-dir="right">▶</button>
+          <div></div><button class="d-key" data-dir="down">▼</button><div></div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px; pointer-events:auto;">
+          <button class="g-btn g-btn-gold g-btn-sm" id="bot-tag-btn" style="display:none; padding:6px 9px; font-size:8px;">TAG BOT!</button>
+          <div id="hider-code-pill" class="g-pill" style="display:none;">CODE: <span id="my-code-val">0000</span></div>
+        </div>
+      </div>
+
+      <!-- 3-Button Gadget Dock (Checklist #5) -->
+      <div class="gadget-dock" id="gadget-dock"></div>
+    </div>
+
+    <!-- DEVIL LOCK SCREEN: STAY FOR 60s -->
+    <div class="devil-stay-screen" id="devil-stay-screen">
+      <div id="devil-stay-char"></div>
+      <span class="g-pill" style="color:#ff7c7c;">YOU ARE THE DEVIL</span>
+      <div style="font-family:var(--font-display); font-size:18px; color:#fff;">STAY FOR <span id="devil-stay-inline">60</span>s</div>
+      <div style="font-family:var(--font-display); font-size:52px; color:#ffe07d;" id="devil-stay-big">60</div>
+      <button class="g-btn g-btn-dark g-btn-sm" id="skip-devil60">SKIP 60s (DEMO)</button>
+    </div>
+
+    <!-- CATCH CODE + BACKUP DISPUTE MODAL (Checklist #3) -->
+    <div class="g-modal-bg" id="m-catch">
+      <div class="g-panel g-modal-card">
+        <div style="font-family:var(--font-display); font-size:10.5px; color:#ffe07d; margin-bottom:10px;">CATCH HIDER</div>
+        <input type="tel" maxlength="4" class="g-input" id="in-catch" placeholder="4-DIGIT CODE" style="text-align:center; font-size:18px; letter-spacing:5px;" />
+        <div id="catch-hint" style="font-size:10px; color:#83e66c; margin-top:7px;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+          <button class="g-btn g-btn-dark g-btn-sm" id="cancel-catch">BACK</button>
+          <button class="g-btn g-btn-red g-btn-sm" id="ok-catch">VERIFY CODE</button>
+        </div>
+        <!-- Backup Dispute Option if Hider refuses to share code! -->
+        <button class="g-btn g-btn-gold g-btn-sm" id="btn-dispute-catch" style="width:100%; margin-top:10px; font-size:8px;">
+          NO CODE? PROXIMITY / DISPUTE TAG
+        </button>
+      </div>
+    </div>
+
+    <!-- BATTERY SAVER / POCKET MODE OVERLAY (Checklist #8) -->
+    <div class="pocket-screen" id="pocket-screen">
+      <div style="font-family:var(--font-display); font-size:12px; color:#83e66c;">BATTERY SAVER • POCKET MODE</div>
+      <div style="font-size:12px;">3D Map paused to save battery. GPS, Zone &amp; Radar vibration alerts are ACTIVE.</div>
+      <div style="font-family:var(--font-display); font-size:20px; color:#ffe07d; margin-top:6px;" id="pocket-timer">15:00</div>
+      <button class="g-btn g-btn-dark g-btn-sm" id="btn-wake-pocket" style="margin-top:12px;">TAP TO WAKE SCREEN</button>
+    </div>
+
+    <!-- ZERO-FREEZE RESULT SCREEN -->
+    <div class="result-screen" id="result-screen">
+      <div class="g-card-warm g-modal-card" style="text-align:center;">
+        <div id="res-trophy" style="display:flex; justify-content:center; margin-bottom:8px;"></div>
+        <span class="g-pill">GAME OVER</span>
+        <div style="font-family:var(--font-display); font-size:16px; color:#10161c; margin:12px 0 6px;" id="res-title">MATCH OVER</div>
+        <div style="font-size:12px; font-weight:700; margin-bottom:14px;" id="res-desc"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="g-btn g-btn-dark g-btn-sm" id="res-btn-lobby">LOBBY</button>
+          <button class="g-btn g-btn-green g-btn-sm" id="res-btn-again">PLAY AGAIN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase_config.js"></script>
+  <script src="js/firebase_sync.js"></script>
+  <script src="js/pixel_art.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/zone_director.js"></script>
+  <script src="js/map_decorator.js"></script>
+  <script src="js/devil_intro.js"></script>
+  <script>
+    (function () {
+      const A = window.ZP_ART;
+      document.getElementById("btn-recenter").innerHTML = A.icons.gps;
+      document.getElementById("btn-exit").innerHTML = A.icons.back;
+      document.getElementById("devil-stay-char").innerHTML = A.charIMG("devil", 96, 0);
+      document.getElementById("res-trophy").innerHTML = A.icons.trophy;
+
+      let saved = window.ZP_STATE.load();
+      if (saved.players.length < 3) window.ZP_STATE.fillBotsToTarget(saved, 5);
+      if (!saved.arenaMap || !saved.arenaMap.ready) window.ZP_STATE.prebakeArenaProps(saved, 28.6139, 77.2090);
+
+      let anchorLat = saved.arenaMap.anchorLat || 28.6139;
+      let anchorLng = saved.arenaMap.anchorLng || 77.2090;
+      let cropRadius = saved.arenaMap.cropRadius || 340;
+      let firstGpsFix = true;
+      let walkGpsMode = !saved.demoMode; // Real Play uses GPS by default; Demo uses D-Pad!
+      let gpsWatchId = null;
+      let pocketMode = false;
+
+      let map = null, mapLoaded = false, is3D = true, useOfflineCanvas = false;
+      let mapMarkers = {}, decorApplied = false;
+      let mainRafId = null, tickId = null, introCtrl = null, nearbyBot = null;
+      let zoneDir = null, Z = null, G = null, me = null, devilIdx = 0;
+
+      // Show D-Pad in Demo Mode, hide in Real GPS Play (user can still toggle if needed)
+      if (!saved.demoMode) document.getElementById("dpad").classList.add("hidden");
+
+      window.ZP_SYNC.init(ok => {
+        if (ok && !saved.demoMode) {
+          window.ZP_SYNC.joinRoom(saved.roomCode, remote => {
+            // Sync remote players' live GPS & caught status
+            if (remote && remote.players && G) {
+              G.players.forEach(p => {
+                if (p.id === me.id || p.isBot) return;
+                const rp = remote.players[p.id];
+                if (rp) {
+                  if (typeof rp.x === "number") p.x = rp.x;
+                  if (typeof rp.y === "number") p.y = rp.y;
+                  if (typeof rp.alive === "boolean") p.alive = rp.alive;
+                  p.cloakedSec = rp.cloaked ? 5 : 0;
+                }
+              });
+              updateAliveHUD();
+              checkWin();
+            }
+            // Non-Host clients sync authoritative Zone & Radar from Host (Checklist #10)
+            if (!saved.isHost && remote && remote.gameState && G && Z) {
+              const gs = remote.gameState;
+              Z.cx = gs.cx; Z.cy = gs.cy; Z.radius = gs.radius;
+              G.radarRevealed = !!gs.radarRevealed;
+              G.matchSecLeft = gs.matchSecLeft;
+            }
+          });
+        }
+      });
+
+      function metersToLngLat(mx, my) {
+        return [anchorLng + mx / (111320 * Math.cos((anchorLat * Math.PI) / 180)), anchorLat - my / 111320];
+      }
+      function lngLatToMeters(lng, lat) {
+        return { x: (lng - anchorLng) * (111320 * Math.cos((anchorLat * Math.PI) / 180)), y: -(lat - anchorLat) * 111320 };
+      }
+
+      function computeRoadHeight(isDevil) {
+        if (!map) return isDevil ? 44 : 38;
+        const mpp = (156543.03392 * Math.cos((anchorLat * Math.PI) / 180)) / Math.pow(2, map.getZoom());
+        return Math.round(Math.max(isDevil ? 28 : 24, Math.min(isDevil ? 62 : 52, (isDevil ? 13.5 : 11.0) / Math.max(0.05, mpp))));
+      }
+
+      function loadMapLibreAsync() {
+        const css = document.createElement("link");
+        css.rel = "stylesheet"; css.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
+        document.head.appendChild(css);
+        const sc = document.createElement("script");
+        sc.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"; sc.async = true;
+        sc.onload = () => { if (window.maplibregl) initMapLibre(); else enableOffline(); };
+        sc.onerror = enableOffline;
+        document.body.appendChild(sc);
+      }
+
+      function enableOffline() {
+        useOfflineCanvas = true;
+        document.getElementById("map").style.display = "none";
+        document.getElementById("retro-canvas").style.display = "block";
+        resizeRetro();
+      }
+
+      function initMapLibre() {
+        try {
+          map = new maplibregl.Map({
+            container: "map",
+            style: "https://tiles.openfreemap.org/styles/liberty",
+            center: [anchorLng, anchorLat],
+            zoom: 17.2, minZoom: 15.6, maxZoom: 19.2,
+            pitch: 60, bearing: -15, antialias: true, attributionControl: false
+          });
+          map.on("zoom", () => {
+            if (!G) return;
+            G.players.forEach(p => {
+              const r = mapMarkers[p.id];
+              if (r && r.imgEl) r.imgEl.style.height = computeRoadHeight(p.role === "devil") + "px";
+            });
+          });
+          map.on("load", () => {
+            mapLoaded = true;
+            setupZoneLayers();
+            window.ZP_MAP_DECOR.applyArenaCrop(map, anchorLng, anchorLat, cropRadius);
+            map.once("idle", () => {
+              if (!decorApplied) {
+                decorApplied = true;
+                window.ZP_MAP_DECOR.decorateEmptySpaces(map, anchorLng, anchorLat, saved.arenaMap.propCandidates);
+              }
+            });
+            syncMapLibre(true);
+          });
+          map.on("error", () => { if (!mapLoaded) enableOffline(); });
+        } catch (e) { enableOffline(); }
+      }
+
+      function setupZoneLayers() {
+        const initC = { type: "Feature", geometry: { type: "Polygon", coordinates: [window.ZP_MAP_DECOR.createCircleRing(anchorLng, anchorLat, Z ? Z.radius : 150, 64)] } };
+        const empty = { type: "Feature", geometry: { type: "Polygon", coordinates: [] } };
+        if (!map.getSource("safe-zone")) {
+          map.addSource("safe-zone", { type: "geojson", data: initC });
+          map.addLayer({ id: "safe-zone-fill", type: "fill", source: "safe-zone", paint: { "fill-color": "#38bdf8", "fill-opacity": 0.14 } });
+          map.addLayer({ id: "safe-zone-border", type: "line", source: "safe-zone", paint: { "line-color": "#0284c7", "line-width": 3.5 } });
+        }
+        if (!map.getSource("next-zone")) {
+          map.addSource("next-zone", { type: "geojson", data: empty });
+          map.addLayer({ id: "next-zone-border", type: "line", source: "next-zone", paint: { "line-color": "#ffe07d", "line-width": 2.5, "line-dasharray": [3, 2] } });
+        }
+      }
+
+      function createCharMarker(p, labelOverride) {
+        const isSelf = p.id === me.id, isDevil = p.role === "devil";
+        const root = document.createElement("div");
+        root.className = "rpg-marker" + (isDevil ? " devil" : (isSelf ? " me" : ""));
+        const wrap = document.createElement("div"); wrap.className = "rpg-sprite-wrap";
+        const sh = document.createElement("div"); sh.className = "rpg-shadow";
+        const img = document.createElement("img");
+        img.src = A.charSrc(isDevil ? "devil" : "me", p.spriteIdx ?? 0);
+        img.style.height = computeRoadHeight(isDevil) + "px";
+        wrap.appendChild(sh); wrap.appendChild(img);
+        const lbl = document.createElement("div"); lbl.className = "rpg-name";
+        lbl.textContent = labelOverride || (isSelf ? (isDevil ? "DEVIL(YOU)" : "YOU") : (isDevil ? "DEVIL" : p.name));
+        root.appendChild(wrap); root.appendChild(lbl);
+        const marker = new maplibregl.Marker({ element: root, anchor: "bottom" }).setLngLat(metersToLngLat(p.x, p.y)).addTo(map);
+        return { marker, imgEl: img };
+      }
+
+      // Check No-Go Hazard (Highway / Deep Water) near player (Checklist #9)
+      function checkNoGoSafety() {
+        const el = document.getElementById("nogo-alert");
+        if (!map || !mapLoaded || !me || !me.alive) { el.classList.remove("show"); return; }
+        try {
+          const pt = map.project(metersToLngLat(me.x, me.y));
+          const feats = map.queryRenderedFeatures([[pt.x - 10, pt.y - 10], [pt.x + 10, pt.y + 10]]);
+          const danger = feats.some(f => {
+            const lid = (f.layer && f.layer.id || "").toLowerCase();
+            return lid.includes("motorway") || lid.includes("trunk") || lid.includes("primary") || lid.includes("water");
+          });
+          el.classList.toggle("show", danger);
+        } catch (e) {}
+      }
+
+      let lastZCol = "", lastNCol = "", lastSyncTs = 0;
+      function syncMapLibre(force = false) {
+        if (!map || !mapLoaded || !G || !Z || pocketMode) return;
+        const now = performance.now();
+        if (!force && now - lastSyncTs < 55) return;
+        lastSyncTs = now;
+
+        const [zLng, zLat] = metersToLngLat(Z.cx, Z.cy);
+        if (map.getSource("safe-zone")) {
+          map.getSource("safe-zone").setData({ type: "Feature", geometry: { type: "Polygon", coordinates: [window.ZP_MAP_DECOR.createCircleRing(zLng, zLat, Z.radius, 64)] } });
+        }
+        let fCol = "#38bdf8", lCol = "#0284c7";
+        if (G.outOfZone) { fCol = "#ef4444"; lCol = "#dc2626"; }
+        else if (Z.state === "shifting" && Z.actionType === "EXPANDING") { fCol = "#4ade80"; lCol = "#16a34a"; }
+        else if (Z.state === "shifting" && Z.actionType === "CENTER_SHIFT") { fCol = "#facc15"; lCol = "#ca8a04"; }
+        if (fCol !== lastZCol) { lastZCol = fCol; map.setPaintProperty("safe-zone-fill", "fill-color", fCol); map.setPaintProperty("safe-zone-border", "line-color", lCol); }
+
+        if (map.getSource("next-zone")) {
+          if (Z.state === "shifting") {
+            const [tLng, tLat] = metersToLngLat(Z.targetCx, Z.targetCy);
+            map.getSource("next-zone").setData({ type: "Feature", geometry: { type: "Polygon", coordinates: [window.ZP_MAP_DECOR.createCircleRing(tLng, tLat, Z.targetRadius, 64)] } });
+            const nc = Z.actionType === "EXPANDING" ? "#83e66c" : "#ffe07d";
+            if (nc !== lastNCol) { lastNCol = nc; map.setPaintProperty("next-zone-border", "line-color", nc); }
+          } else if (lastNCol !== "OFF") {
+            lastNCol = "OFF";
+            map.getSource("next-zone").setData({ type: "Feature", geometry: { type: "Polygon", coordinates: [] } });
+          }
+        }
+
+        // Players visibility: Ghost Spectator sees ALL players! Alive players follow 8s Radar Ping + Cloak!
+        const isSpectator = !me.alive;
+        G.players.forEach(p => {
+          const isSelf = p.id === me.id, isDevil = p.role === "devil";
+          const hiddenByCloak = !isSelf && !isSpectator && p.cloakedSec > 0;
+          const vis = p.alive && !hiddenByCloak && (isSelf || isSpectator || G.radarRevealed || (G.phase === "hide60" && isDevil));
+          const ll = metersToLngLat(p.x, p.y);
+          if (vis) {
+            if (!mapMarkers[p.id]) mapMarkers[p.id] = createCharMarker(p);
+            else mapMarkers[p.id].marker.setLngLat(ll);
+          } else if (mapMarkers[p.id]) {
+            mapMarkers[p.id].marker.remove(); delete mapMarkers[p.id];
+          }
+        });
+
+        // Show Decoy Ping if active
+        if (G.decoy && G.decoy.secLeft > 0) {
+          const dll = metersToLngLat(G.decoy.x, G.decoy.y);
+          if (!mapMarkers["decoy"]) mapMarkers["decoy"] = createCharMarker({ id: "decoy", role: "hider", spriteIdx: 2, x: G.decoy.x, y: G.decoy.y }, "DECOY PING");
+          else mapMarkers["decoy"].marker.setLngLat(dll);
+        } else if (mapMarkers["decoy"]) {
+          mapMarkers["decoy"].marker.remove(); delete mapMarkers["decoy"];
+        }
+      }
+
+      // ---------------------------------------------------------
+      // BUILD 3 ROLE-SPECIFIC GADGET CARDS (Checklist #5, 40589.png style)
+      // ---------------------------------------------------------
+      function renderGadgetDock() {
+        const dock = document.getElementById("gadget-dock");
+        dock.innerHTML = "";
+        if (!me || !me.alive) {
+          dock.innerHTML = `
+            <button class="gadget-card gold" style="grid-column:span 3;" id="g-ghost-warn">
+              <span class="g-name">GHOST HELPER: SEND DANGER PING</span>
+              <span class="g-sub">Spectating live — tap to warn surviving teammates!</span>
+            </button>`;
+          document.getElementById("g-ghost-warn").onclick = triggerGhostWarn;
+          return;
+        }
+
+        if (me.role === "devil") {
+          dock.innerHTML = `
+            <button class="gadget-card" id="g-scan">
+              <span class="g-name">QUICK SCAN</span>
+              <span class="g-sub" id="g-scan-sub">${G.gadgets.scanCd > 0 ? G.gadgets.scanCd + "s" : "5s Ping"}</span>
+            </button>
+            <button class="gadget-card gold" id="g-lock">
+              <span class="g-name">ZONE LOCK</span>
+              <span class="g-sub" id="g-lock-sub">${G.gadgets.lockCd > 0 ? G.gadgets.lockCd + "s" : "No Expand 20s"}</span>
+            </button>
+            <button class="gadget-card red" id="g-catch">
+              <span class="g-name">CATCH</span>
+              <span class="g-sub">Code / Dispute</span>
+            </button>`;
+          document.getElementById("g-scan").onclick = () => {
+            if (G.gadgets.scanCd > 0) return;
+            window.ZP_AUDIO.radarPing();
+            G.gadgets.scanCd = saved.fastTimers ? 25 : 75;
+            G.radarRevealed = true;
+            G.radarTimer = 5; // 5s quick pulse!
+            pushFeed("DEVIL USED QUICK SCAN (5s)!");
+            renderGadgetDock();
+          };
+          document.getElementById("g-lock").onclick = () => {
+            if (G.gadgets.lockCd > 0) return;
+            window.ZP_AUDIO.zoneShrink();
+            G.gadgets.lockCd = saved.fastTimers ? 30 : 90;
+            zoneDir.lockExpand(20);
+            pushFeed("ZONE LOCKED — NO EXPAND FOR 20s!");
+            renderGadgetDock();
+          };
+          document.getElementById("g-catch").onclick = openCatchModal;
+        } else {
+          dock.innerHTML = `
+            <button class="gadget-card" id="g-cloak">
+              <span class="g-name">GHOST CLOAK</span>
+              <span class="g-sub">${G.gadgets.cloakCd > 0 ? G.gadgets.cloakCd + "s" : "Hide 12s"}</span>
+            </button>
+            <button class="gadget-card gold" id="g-decoy">
+              <span class="g-name">DECOY PING</span>
+              <span class="g-sub">${G.gadgets.decoyCd > 0 ? G.gadgets.decoyCd + "s" : "Fake 35m"}</span>
+            </button>
+            <button class="gadget-card red" id="g-sense">
+              <span class="g-name">DEVIL SENSE</span>
+              <span class="g-sub">${G.gadgets.senseCd > 0 ? G.gadgets.senseCd + "s" : "Check Dist"}</span>
+            </button>`;
+          document.getElementById("g-cloak").onclick = () => {
+            if (G.gadgets.cloakCd > 0) return;
+            window.ZP_AUDIO.click();
+            me.cloakedSec = 12;
+            G.gadgets.cloakCd = saved.fastTimers ? 25 : 75;
+            pushFeed("GHOST CLOAK ON — HIDDEN FROM RADAR (12s)!");
+            renderGadgetDock();
+          };
+          document.getElementById("g-decoy").onclick = () => {
+            if (G.gadgets.decoyCd > 0) return;
+            window.ZP_AUDIO.radarPing();
+            const ang = Math.random() * Math.PI * 2;
+            G.decoy = { x: me.x + Math.cos(ang) * 35, y: me.y + Math.sin(ang) * 35, secLeft: 14 };
+            G.gadgets.decoyCd = saved.fastTimers ? 25 : 80;
+            pushFeed("DECOY PING DROPPED 35m AWAY!");
+            renderGadgetDock();
+          };
+          document.getElementById("g-sense").onclick = () => {
+            if (G.gadgets.senseCd > 0) return;
+            window.ZP_AUDIO.click();
+            const dev = G.players.find(p => p.role === "devil");
+            const d = dev ? Math.round(dist(me, dev)) : 999;
+            G.gadgets.senseCd = saved.fastTimers ? 15 : 45;
+            pushFeed(`DEVIL SENSE: DEVIL IS ~${d}m AWAY!`);
+            renderGadgetDock();
+          };
+        }
+      }
+
+      function triggerGhostWarn() {
+        window.ZP_AUDIO.radarPing();
+        const dev = G.players.find(p => p.role === "devil");
+        if (dev) window.ZP_SYNC.pushGhostAlert(saved.roomCode, me.name, dev.x, dev.y);
+        pushFeed("GHOST WARNING SENT TO TEAMMATES!");
+      }
+      document.getElementById("btn-ghost-ping").onclick = triggerGhostWarn;
+
+      function startGPS() {
+        if (!("geolocation" in navigator)) { document.getElementById("gps-mini").textContent = "DEMO PAD"; return; }
+        if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
+        gpsWatchId = navigator.geolocation.watchPosition(
+          pos => {
+            const lat = pos.coords.latitude, lng = pos.coords.longitude;
+            document.getElementById("gps-mini").textContent = `±${Math.round(pos.coords.accuracy)}m`;
+            if (firstGpsFix) {
+              firstGpsFix = false;
+              anchorLat = lat; anchorLng = lng;
+              if (map && mapLoaded) {
+                window.ZP_MAP_DECOR.applyArenaCrop(map, anchorLng, anchorLat, cropRadius);
+                map.flyTo({ center: [anchorLng, anchorLat], zoom: 17.4, pitch: is3D ? 60 : 0, duration: 800 });
+              }
+            } else if (walkGpsMode && G && G.phase !== "over" && me && me.alive && !(me.role === "devil" && G.phase === "hide60")) {
+              const m = lngLatToMeters(lng, lat);
+              me.x = m.x; me.y = m.y;
+            }
+          },
+          () => { document.getElementById("gps-mini").textContent = "DEMO PAD"; },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+
+      function stopAllLoops() {
+        if (mainRafId !== null) { cancelAnimationFrame(mainRafId); mainRafId = null; }
+        if (tickId !== null) { clearInterval(tickId); tickId = null; }
+        if (introCtrl) { introCtrl.destroy(); introCtrl = null; }
+        resetKeys();
+      }
+      function fullTeardown() {
+        stopAllLoops();
+        window.ZP_SYNC.leaveRoom();
+        if (gpsWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+      }
+      window.addEventListener("pagehide", fullTeardown);
+      window.addEventListener("beforeunload", fullTeardown);
+
+      function initNewMatch() {
+        stopAllLoops();
+        document.getElementById("result-screen").classList.remove("show");
+        document.getElementById("devil-stay-screen").classList.remove("show");
+        document.getElementById("hide60-bar").classList.remove("show");
+        document.getElementById("ghost-bar").classList.remove("show");
+        document.getElementById("out-alert").classList.remove("show");
+        document.getElementById("nogo-alert").classList.remove("show");
+        document.getElementById("danger-frame").classList.remove("danger");
+        document.getElementById("m-catch").classList.remove("active");
+        document.getElementById("bot-tag-btn").style.display = "none";
+        document.getElementById("event-feed").innerHTML = "";
+
+        lastZCol = ""; lastNCol = "";
+        Object.keys(mapMarkers).forEach(k => { mapMarkers[k].marker.remove(); delete mapMarkers[k]; });
+        if (map) { try { map.dragPan.enable(); map.touchZoomRotate.enable(); } catch (e) {} }
+
+        saved = window.ZP_STATE.load();
+        if (saved.players.length < 3) window.ZP_STATE.fillBotsToTarget(saved, 5);
+
+        const syncedIdx = saved.syncedDevilId ? saved.players.findIndex(p => p.id === saved.syncedDevilId) : -1;
+        devilIdx = syncedIdx >= 0 ? syncedIdx : window.ZP_STATE.pickDevilIndex(saved.players, saved.roleMode || "random");
+        saved.players.forEach((p, i) => { p.role = i === devilIdx ? "devil" : "hider"; });
+
+        zoneDir = window.ZP_ZONE_DIRECTOR.create({
+          fastTimers: saved.fastTimers,
+          startRadius: saved.startRadius || 150,
+          minRadius: saved.minRadius || 85,
+          maxRadius: Math.min(270, cropRadius - 55),
+          maxCenterRoam: Math.max(70, cropRadius - 210)
+        });
+        Z = zoneDir.data;
+
+        // CHECKLIST #1: Radar reveal reduced from 30s -> 8s ping!
+        const STEALTH_SEC = saved.fastTimers ? 20 : 180;
+        const REVEAL_SEC = 8; // 8-second tactical radar ping!
+
+        G = {
+          phase: "intro",
+          stealthSec: STEALTH_SEC,
+          revealSec: REVEAL_SEC,
+          matchSecLeft: (saved.durationMin || 15) * 60,
+          hideSecLeft: 60,
+          radarRevealed: false,
+          radarTimer: STEALTH_SEC,
+          graceTimer: 20, // CHECKLIST #7: 20s GPS Drift Grace Timer!
+          outOfZone: false,
+          decoy: null,
+          gadgets: { scanCd: 0, lockCd: 0, cloakCd: 0, decoyCd: 0, senseCd: 0 },
+          players: []
+        };
+
+        saved.players.forEach((p, idx) => {
+          const ang = (idx / saved.players.length) * Math.PI * 2 - Math.PI / 2;
+          const d = p.role === "devil" ? 0 : 42;
+          G.players.push({
+            ...p, spriteIdx: p.spriteIdx ?? idx, alive: true, cloakedSec: 0,
+            x: Math.cos(ang) * d, y: Math.sin(ang) * d,
+            lastKnownX: Math.cos(ang) * d, lastKnownY: Math.sin(ang) * d, wanderAngle: ang
+          });
+        });
+
+        me = G.players.find(p => p.id === saved.myId || p.id === "me" || p.isSelf) || G.players[0];
+        document.getElementById("my-role-lbl").textContent = me.role === "devil" ? "DEVIL" : "HIDER";
+        document.getElementById("my-role-lbl").style.color = me.role === "devil" ? "#ff7c7c" : "#83e66c";
+
+        const codePill = document.getElementById("hider-code-pill");
+        if (me.role === "hider") {
+          codePill.style.display = "inline-flex";
+          document.getElementById("my-code-val").textContent = me.catchCode;
+        } else {
+          codePill.style.display = "none";
+        }
+
+        document.getElementById("match-timer").textContent = fmt(G.matchSecLeft);
+        document.getElementById("radar-cd").textContent = fmt(G.radarTimer);
+        updateAliveHUD();
+        renderGadgetDock();
+
+        const stage = document.getElementById("intro-stage");
+        stage.classList.remove("hidden");
+        introCtrl = window.ZP_DEVIL_INTRO.run({
+          canvas: document.getElementById("intro-canvas"),
+          players: G.players,
+          devilIdx,
+          onComplete: () => {
+            stage.classList.add("hidden");
+            if (map && mapLoaded) {
+              map.resize();
+              map.easeTo({ center: metersToLngLat(me.x, me.y), zoom: 17.4, pitch: is3D ? 60 : 0, duration: 500 });
+              syncMapLibre(true);
+            }
+            beginHide60();
+          }
+        });
+      }
+
+      document.getElementById("btn-skip-intro").onclick = () => { window.ZP_AUDIO.click(); if (introCtrl) introCtrl.skip(); };
+
+      function beginHide60() {
+        G.phase = "hide60"; G.hideSecLeft = 60;
+        if (me.role === "devil") {
+          document.getElementById("devil-stay-screen").classList.add("show");
+          document.getElementById("devil-stay-big").textContent = "60";
+          document.getElementById("devil-stay-inline").textContent = "60";
+        } else {
+          document.getElementById("hide60-bar").classList.add("show");
+          document.getElementById("hider-60s").textContent = "60";
+          pushFeed("YOU HAVE 60s TO HIDE YOURSELF!");
+        }
+        startLoops();
+      }
+
+      function finishHide60() {
+        if (!G || G.phase !== "hide60") return;
+        G.phase = "hunt"; G.hideSecLeft = 0;
+        document.getElementById("devil-stay-screen").classList.remove("show");
+        document.getElementById("hide60-bar").classList.remove("show");
+        window.ZP_AUDIO.radarPing();
+        pushFeed("60s OVER — DEVIL IS HUNTING!");
+      }
+
+      document.getElementById("skip-devil60").onclick = () => { window.ZP_AUDIO.click(); finishHide60(); };
+      document.getElementById("skip-hider60").onclick = () => { window.ZP_AUDIO.click(); finishHide60(); };
+
+      function fmt(s) {
+        return String(Math.floor(Math.max(0, s) / 60)).padStart(2, "0") + ":" + String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0");
+      }
+      function pushFeed(txt) {
+        const f = document.getElementById("event-feed");
+        const el = document.createElement("div"); el.className = "ev-item"; el.textContent = txt;
+        f.prepend(el);
+        while (f.children.length > 3) f.lastChild.remove();
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
+      }
+      function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+      function updateAliveHUD() {
+        const hiders = G.players.filter(p => p.role === "hider");
+        document.getElementById("alive-count").textContent = hiders.filter(p => p.alive).length;
+      }
+
+      function eliminate(target, reason) {
+        if (!target.alive || G.phase === "over") return;
+        target.alive = false;
+        window.ZP_AUDIO.catchSound();
+        window.ZP_SYNC.pushCatchEvent(saved.roomCode, target.id, reason);
+        pushFeed(reason);
+        updateAliveHUD();
+
+        // CHECKLIST #4: If human Hider is caught, activate Ghost Spectator Helper Mode!
+        if (target.id === me.id && me.role === "hider") {
+          document.getElementById("ghost-bar").classList.add("show");
+          document.getElementById("hider-code-pill").style.display = "none";
+          renderGadgetDock();
+          pushFeed("YOU ARE NOW A GHOST HELPER! WATCH LIVE & WARN TEAM.");
+        }
+        checkWin();
+      }
+
+      function checkWin() {
+        if (!G || G.phase === "over") return;
+        const hiders = G.players.filter(p => p.role === "hider");
+        const alive = hiders.filter(p => p.alive);
+        const devil = G.players.find(p => p.role === "devil");
+        if (alive.length === 0) endGame("DEVIL WINS!", `${devil.name} caught all ${hiders.length} Hiders!`);
+        else if (!devil.alive) endGame("HIDERS WIN!", `Devil (${devil.name}) terminated outside zone!`);
+        else if (G.matchSecLeft <= 0) endGame("HIDERS WIN!", `Time up! ${alive.length} Hider(s) survived!`);
+      }
+
+      function endGame(title, desc) {
+        G.phase = "over";
+        stopAllLoops();
+        if (map) { try { map.dragPan.disable(); map.touchZoomRotate.disable(); } catch (e) {} }
+        document.getElementById("m-catch").classList.remove("active");
+        document.getElementById("pocket-screen").classList.remove("show");
+        document.getElementById("res-title").textContent = title;
+        document.getElementById("res-desc").textContent = desc;
+        document.getElementById("result-screen").classList.add("show");
+      }
+
+      document.getElementById("res-btn-again").onclick = e => { e.stopPropagation(); window.ZP_AUDIO.click(); initNewMatch(); };
+      document.getElementById("res-btn-lobby").onclick = e => { e.stopPropagation(); window.ZP_AUDIO.click(); fullTeardown(); window.location.href = "3_room_lobby.html"; };
+
+      // CATCH CODE + BACKUP DISPUTE TAG (Checklist #3)
+      function openCatchModal() {
+        window.ZP_AUDIO.click();
+        const m = document.getElementById("m-catch"), inp = document.getElementById("in-catch");
+        inp.value = "";
+        const alive = G.players.filter(p => p.role === "hider" && p.alive);
+        document.getElementById("catch-hint").textContent = saved.demoMode
+          ? "DEMO CODES: " + alive.slice(0, 3).map(h => `${h.name}:${h.catchCode}`).join(" | ")
+          : "Ask caught Hider for their 4-digit code (or use Proximity Tag below).";
+        m.classList.add("active");
+        setTimeout(() => inp.focus(), 80);
+      }
+      document.getElementById("cancel-catch").onclick = () => { window.ZP_AUDIO.click(); document.getElementById("m-catch").classList.remove("active"); };
+      document.getElementById("ok-catch").onclick = () => {
+        const code = document.getElementById("in-catch").value.trim();
+        const f = G.players.find(p => p.role === "hider" && p.alive && p.catchCode === code);
+        if (!f) { window.ZP_STATE.showToast("WRONG CODE!"); return; }
+        document.getElementById("m-catch").classList.remove("active");
+        eliminate(f, `${f.name} CAUGHT BY CODE!`);
+      };
+      document.getElementById("btn-dispute-catch").onclick = () => {
+        // Finds nearest alive Hider within 20m for backup Proximity / Dispute Tag!
+        const alive = G.players.filter(p => p.role === "hider" && p.alive);
+        let nearest = null, best = Infinity;
+        alive.forEach(h => { const d = dist(me, h); if (d < best) { best = d; nearest = h; } });
+        if (!nearest || best > 25) {
+          window.ZP_STATE.showToast("NO HIDER WITHIN 25m FOR PROXIMITY TAG!");
+          return;
+        }
+        document.getElementById("m-catch").classList.remove("active");
+        eliminate(nearest, `${nearest.name} TAGGED (PROXIMITY BACKUP)!`);
+      };
+
+      document.getElementById("bot-tag-btn").onclick = () => {
+        if (nearbyBot && nearbyBot.alive) eliminate(nearbyBot, `${nearbyBot.name} TAGGED!`);
+      };
+
+      // Touch-Safe D-Pad
+      const keys = { up: false, down: false, left: false, right: false };
+      function resetKeys() {
+        keys.up = keys.down = keys.left = keys.right = false;
+        document.querySelectorAll(".d-key.pressed").forEach(b => b.classList.remove("pressed"));
+      }
+      window.addEventListener("blur", resetKeys);
+      window.addEventListener("pointerup", resetKeys);
+      window.addEventListener("pointercancel", resetKeys);
+      document.querySelectorAll(".d-key[data-dir]").forEach(btn => {
+        const d = btn.dataset.dir;
+        btn.addEventListener("pointerdown", e => { e.preventDefault(); keys[d] = true; btn.classList.add("pressed"); });
+        btn.addEventListener("pointerleave", () => { keys[d] = false; btn.classList.remove("pressed"); });
+      });
+
+      function updateSim(dt) {
+        if (!G || G.phase === "over" || G.phase === "intro") return;
+        const devilFrozen = G.phase === "hide60";
+
+        if (me.alive && !walkGpsMode && !(me.role === "devil" && devilFrozen)) {
+          const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+          const dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+          if (dx || dy) {
+            const len = Math.hypot(dx, dy);
+            me.x += (dx / len) * 28 * dt; me.y += (dy / len) * 28 * dt;
+          }
+        }
+        if (G.phase === "hunt") zoneDir.stepFrame(dt);
+
+        const devil = G.players.find(p => p.role === "devil");
+        G.players.forEach(p => {
+          if (!p.isBot || !p.alive) return;
+          const dZ = Math.hypot(p.x - Z.cx, p.y - Z.cy);
+          if (p.role === "devil") {
+            if (devilFrozen) return;
+            const alive = G.players.filter(h => h.role === "hider" && h.alive);
+            if (!alive.length) return;
+            let tgt = alive[0], best = Infinity;
+            alive.forEach(h => {
+              const tx = G.radarRevealed && h.cloakedSec <= 0 ? h.x : h.lastKnownX;
+              const ty = G.radarRevealed && h.cloakedSec <= 0 ? h.y : h.lastKnownY;
+              const d = Math.hypot(tx - p.x, ty - p.y);
+              if (d < best) { best = d; tgt = h; }
+            });
+            const tx = G.radarRevealed && tgt.cloakedSec <= 0 ? tgt.x : tgt.lastKnownX;
+            const ty = G.radarRevealed && tgt.cloakedSec <= 0 ? tgt.y : tgt.lastKnownY;
+            const a = Math.atan2(ty - p.y, tx - p.x);
+            const spd = G.radarRevealed ? 21 : 13;
+            p.x += Math.cos(a) * spd * dt; p.y += Math.sin(a) * spd * dt;
+            alive.forEach(h => { if (dist(p, h) < 9) eliminate(h, `${h.name} CAUGHT BY DEVIL!`); });
+          } else {
+            const dDev = devil ? dist(p, devil) : 999;
+            let ang = p.wanderAngle, spd = 8;
+            if (dZ > Z.radius - 18) { ang = Math.atan2(Z.cy - p.y, Z.cx - p.x); spd = 23; }
+            else if (devilFrozen || dDev < 75 || G.radarRevealed) { ang = Math.atan2(p.y - devil.y, p.x - devil.x) + Math.sin(performance.now() * 0.0012) * 0.4; spd = 18; }
+            else { p.wanderAngle += (Math.random() - 0.5) * dt * 2.2; spd = 6; }
+            p.x += Math.cos(ang) * spd * dt; p.y += Math.sin(ang) * spd * dt;
+          }
+        });
+
+        const tagBtn = document.getElementById("bot-tag-btn");
+        if (me.role === "devil" && me.alive && G.phase === "hunt") {
+          const near = G.players.find(p => p.role === "hider" && p.alive && p.isBot && dist(me, p) <= 24);
+          if (near) { nearbyBot = near; tagBtn.textContent = `TAG ${near.name}!`; tagBtn.style.display = "inline-flex"; }
+          else { nearbyBot = null; tagBtn.style.display = "none"; }
+        }
+      }
+
+      function tick1s() {
+        if (!G || G.phase === "over" || G.phase === "intro") return;
+
+        // Cooldowns & Decoy timers
+        Object.keys(G.gadgets).forEach(k => { if (G.gadgets[k] > 0) G.gadgets[k]--; });
+        if (me.cloakedSec > 0) me.cloakedSec--;
+        if (G.decoy && G.decoy.secLeft > 0) G.decoy.secLeft--;
+        renderGadgetDock();
+
+        // Throttled 2s Firebase MVP Sync (Checklist #10, #11, #12)
+        window.ZP_SYNC.pushMyLocation(saved.roomCode, me.id, { x: me.x, y: me.y, alive: me.alive, cloaked: me.cloakedSec > 0 });
+        if (saved.isHost) {
+          window.ZP_SYNC.pushHostState(saved.roomCode, {
+            phase: G.phase, matchSecLeft: G.matchSecLeft, radarRevealed: G.radarRevealed,
+            cx: Z.cx, cy: Z.cy, radius: Z.radius
+          });
+        }
+
+        if (G.phase === "hide60") {
+          G.hideSecLeft--;
+          if (me.role === "devil") {
+            document.getElementById("devil-stay-big").textContent = Math.max(0, G.hideSecLeft);
+            document.getElementById("devil-stay-inline").textContent = Math.max(0, G.hideSecLeft);
+          } else {
+            document.getElementById("hider-60s").textContent = Math.max(0, G.hideSecLeft);
+          }
+          if (G.hideSecLeft <= 0) finishHide60();
+          return;
+        }
+
+        G.matchSecLeft--;
+        const tStr = fmt(G.matchSecLeft);
+        document.getElementById("match-timer").textContent = tStr;
+        document.getElementById("pocket-timer").textContent = tStr;
+        if (G.matchSecLeft <= 0) { checkWin(); return; }
+
+        // 8s Radar Ping Cycle (Checklist #1)
+        G.radarTimer--;
+        if (G.radarTimer <= 0) {
+          G.radarRevealed = !G.radarRevealed;
+          G.radarTimer = G.radarRevealed ? G.revealSec : G.stealthSec;
+          if (G.radarRevealed) { window.ZP_AUDIO.radarPing(); pushFeed("8s RADAR PING — POSITIONS REVEALED!"); }
+          else { G.players.forEach(p => { p.lastKnownX = p.x; p.lastKnownY = p.y; }); pushFeed("RADAR OFF — STEALTH!"); }
+        }
+        document.getElementById("radar-k").textContent = G.radarRevealed ? "PING LIVE" : "NEXT PING";
+        document.getElementById("radar-cd").textContent = fmt(G.radarTimer);
+
+        // Host-Authoritative Zone Director
+        if (saved.isHost) {
+          zoneDir.tickSecond(G.players, {
+            onShift: (type, msg) => {
+              if (type === "EXPANDING") window.ZP_AUDIO.zoneExpand();
+              else if (type === "SHRINKING") window.ZP_AUDIO.zoneShrink();
+              else window.ZP_AUDIO.radarPing();
+              pushFeed(msg);
+            }
+          });
+        }
+
+        const zStrip = document.getElementById("zone-strip");
+        const expLeft = Math.max(0, Z.maxExpands - Z.expandsUsed);
+        document.getElementById("ctr-txt").textContent = "CTR " + fmt(Z.centerShiftTimer);
+        if (Z.state === "shifting") {
+          zStrip.className = "sub-strip " + (Z.actionType === "EXPANDING" ? "expanding" : Z.actionType === "SHRINKING" ? "shrinking" : "center-shift");
+          document.getElementById("zone-txt").textContent = `${Z.actionType} ${Math.round(Z.radius)}m (${Z.stateTimer}s)`;
+        } else {
+          zStrip.className = "sub-strip";
+          document.getElementById("zone-txt").textContent = `ZONE ${Math.round(Z.radius)}m • EXP ${expLeft}/${Z.maxExpands}`;
+        }
+
+        // 20s GPS Drift Grace Timer (Checklist #7)
+        if (me.alive) {
+          const df = document.getElementById("danger-frame"), oa = document.getElementById("out-alert");
+          if (zoneDir.isOutside(me.x, me.y)) {
+            G.outOfZone = true; G.graceTimer--;
+            df.classList.add("danger"); oa.classList.add("show");
+            document.getElementById("grace-sec").textContent = Math.max(0, G.graceTimer);
+            if (G.graceTimer <= 0) { df.classList.remove("danger"); oa.classList.remove("show"); eliminate(me, `${me.name} OUT OF ZONE!`); }
+          } else {
+            G.outOfZone = false; G.graceTimer = 20; df.classList.remove("danger"); oa.classList.remove("show");
+          }
+          checkNoGoSafety();
+        }
+      }
+
+      // Offline Fallback Canvas
+      const retroCanvas = document.getElementById("retro-canvas");
+      const rCtx = retroCanvas.getContext("2d");
+      function resizeRetro() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        retroCanvas.width = retroCanvas.clientWidth * dpr; retroCanvas.height = retroCanvas.clientHeight * dpr;
+        rCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      function renderOffline() {
+        if (!G || !Z || pocketMode) return;
+        const w = retroCanvas.clientWidth, h = retroCanvas.clientHeight, cx = w / 2, cy = h / 2;
+        const sc = (Math.min(w, h) * 0.42) / Math.max(Z.radius + 70, 230);
+        rCtx.fillStyle = "#0d1712"; rCtx.fillRect(0, 0, w, h);
+        rCtx.beginPath(); rCtx.arc(cx + Z.cx * sc, cy + Z.cy * sc, Z.radius * sc, 0, Math.PI * 2);
+        rCtx.fillStyle = "rgba(56,189,248,0.14)"; rCtx.fill();
+        rCtx.strokeStyle = G.outOfZone ? "#ef4444" : "#38bdf8"; rCtx.lineWidth = 3; rCtx.stroke();
+      }
+
+      // Side Tools: Battery Saver Pocket Mode, 3D Toggle, Recenter, Exit
+      document.getElementById("btn-pocket").onclick = () => {
+        window.ZP_AUDIO.click();
+        pocketMode = true;
+        document.getElementById("pocket-screen").classList.add("show");
+      };
+      document.getElementById("btn-wake-pocket").onclick = () => {
+        window.ZP_AUDIO.click();
+        pocketMode = false;
+        document.getElementById("pocket-screen").classList.remove("show");
+        syncMapLibre(true);
+      };
+      document.getElementById("btn-3d").onclick = function () {
+        window.ZP_AUDIO.click(); is3D = !is3D;
+        this.textContent = is3D ? "3D" : "2D";
+        if (map && mapLoaded) map.easeTo({ pitch: is3D ? 60 : 0, duration: 450 });
+      };
+      document.getElementById("btn-recenter").onclick = () => {
+        window.ZP_AUDIO.click();
+        if (map && mapLoaded && me) map.flyTo({ center: metersToLngLat(me.x, me.y), zoom: 17.5, pitch: is3D ? 60 : 0, duration: 600 });
+      };
+      document.getElementById("btn-exit").onclick = () => {
+        window.ZP_AUDIO.click(); fullTeardown(); window.location.href = "3_room_lobby.html";
+      };
+
+      let lastFrame = performance.now();
+      function startLoops() {
+        stopAllLoops();
+        lastFrame = performance.now();
+        tickId = setInterval(tick1s, 1000);
+        function loop(now) {
+          if (!G || G.phase === "over") return;
+          const dt = Math.min(0.05, (now - lastFrame) / 1000);
+          lastFrame = now;
+          updateSim(dt);
+          if (!pocketMode) {
+            if (useOfflineCanvas) renderOffline();
+            else syncMapLibre();
+          }
+          mainRafId = requestAnimationFrame(loop);
+        }
+        mainRafId = requestAnimationFrame(loop);
+      }
+
+      loadMapLibreAsync();
+      startGPS();
+      initNewMatch();
+    })();
+  </script>
+</body>
+</html>
