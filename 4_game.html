@@ -121,18 +121,62 @@
       pointer-events: auto;
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
     }
+    /* FIX #5: Alive, Visual, Expressive Gadget Cards with Icons & Glow */
     .gadget-card {
-      background: rgba(18, 24, 30, 0.94); border: 2.5px solid #0c0f12; border-radius: 14px;
-      box-shadow: 0 4px 0 #0c0f12; padding: 9px 6px;
-      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      background: linear-gradient(180deg, #1b2f3c 0%, #101d26 100%);
+      border: 2.5px solid #6ce8f7; border-radius: 14px;
+      box-shadow: 0 4px 0 #0c0f12, 0 0 12px rgba(108, 232, 247, 0.28);
+      padding: 8px 5px 7px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
       color: #fff; cursor: pointer; font-family: var(--font-display);
+      position: relative; overflow: hidden;
+      animation: gadgetBreath 2.2s ease-in-out infinite;
     }
-    .gadget-card:active { transform: translateY(2px); }
-    .gadget-card.disabled { opacity: 0.45; }
-    .gadget-card .g-name { font-size: 8.5px; color: #6ce8f7; }
-    .gadget-card.red .g-name { color: #ff7c7c; }
+    .gadget-card.gold { border-color: #ffe07d; box-shadow: 0 4px 0 #0c0f12, 0 0 12px rgba(255, 224, 125, 0.28); }
+    .gadget-card.red  { border-color: #ff6b6b; box-shadow: 0 4px 0 #0c0f12, 0 0 12px rgba(255, 107, 107, 0.32); }
+    .gadget-card:active { transform: scale(0.93) translateY(2px); }
+    .gadget-card.on-cd { opacity: 0.55; animation: none; border-color: #3a4f5e; box-shadow: 0 3px 0 #0c0f12; }
+    .gadget-card .g-name { font-size: 7.5px; color: #6ce8f7; }
+    .gadget-card.red .g-name { color: #ff8585; }
     .gadget-card.gold .g-name { color: #ffe07d; }
-    .gadget-card .g-sub { font-size: 7px; color: #94a8b8; }
+    .gadget-card .g-sub { font-size: 6.8px; color: #cde2ec; }
+
+    @keyframes gadgetBreath {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.16); }
+    }
+
+    /* FIX #8: Fullscreen Devil Elimination Animation Overlay (Synced to All Players!) */
+    .elim-overlay {
+      position: fixed; inset: 0; z-index: 3500;
+      background: radial-gradient(circle at 50% 45%, rgba(153, 27, 27, 0.92), rgba(8, 6, 10, 0.95));
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 20px; gap: 14px; pointer-events: none;
+    }
+    .elim-overlay.show { display: flex; animation: elimFlash 0.35s ease; }
+    @keyframes elimFlash {
+      0% { background: rgba(255, 255, 255, 0.85); }
+      100% { background: radial-gradient(circle at 50% 45%, rgba(153, 27, 27, 0.92), rgba(8, 6, 10, 0.95)); }
+    }
+    .elim-stage {
+      display: flex; align-items: center; justify-content: center; gap: 22px; position: relative;
+    }
+    .elim-slash {
+      position: absolute; width: 170px; height: 8px;
+      background: linear-gradient(90deg, transparent, #ffe07d, #ff4d4d, transparent);
+      transform: rotate(-22deg); box-shadow: 0 0 22px #ff4d4d;
+      animation: slashAnim 0.45s ease-out both;
+    }
+    @keyframes slashAnim {
+      0% { transform: rotate(-22deg) scaleX(0); opacity: 1; }
+      60% { transform: rotate(-22deg) scaleX(1.3); opacity: 1; }
+      100% { transform: rotate(-22deg) scaleX(1.1); opacity: 0.7; }
+    }
+    .elim-victim-hit {
+      filter: grayscale(0.8) brightness(0.65);
+      transform: rotate(16deg) translateX(8px);
+      transition: transform 0.3s ease;
+    }
 
     /* DEVIL 60s STAY SCREEN */
     .devil-stay-screen {
@@ -275,6 +319,18 @@
       <button class="g-btn g-btn-dark g-btn-sm" id="btn-wake-pocket" style="margin-top:12px;">TAP TO WAKE SCREEN</button>
     </div>
 
+    <!-- FIX #8: DEVIL ELIMINATION ANIMATION (SHOWN TO ALL PLAYERS!) -->
+    <div class="elim-overlay" id="elim-overlay">
+      <span class="g-pill" style="background:#7f1d1d; color:#ffe07d;">ELIMINATION!</span>
+      <div class="elim-stage">
+        <div id="elim-devil-art"></div>
+        <div class="elim-slash"></div>
+        <div id="elim-victim-art" class="elim-victim-hit"></div>
+      </div>
+      <div style="font-family:var(--font-display); font-size:18px; color:#ff7c7c; text-shadow:0 3px 0 #000;" id="elim-title">PLAYER ELIMINATED!</div>
+      <div style="font-family:var(--font-display); font-size:10px; color:#ffe07d;" id="elim-sub">CAUGHT BY THE DEVIL</div>
+    </div>
+
     <!-- ZERO-FREEZE RESULT SCREEN -->
     <div class="result-screen" id="result-screen">
       <div class="g-card-warm g-modal-card" style="text-align:center;">
@@ -323,8 +379,13 @@
       let mainRafId = null, tickId = null, introCtrl = null, nearbyBot = null;
       let zoneDir = null, Z = null, G = null, me = null, devilIdx = 0;
 
-      // Show D-Pad in Demo Mode, hide in Real GPS Play (user can still toggle if needed)
-      if (!saved.demoMode) document.getElementById("dpad").classList.add("hidden");
+      // FIX #2 & #3: Strictly hide D-Pad and ALL Skip buttons in Real Match!
+      if (!saved.demoMode) {
+        document.getElementById("dpad").style.display = "none";
+        document.getElementById("btn-skip-intro").style.display = "none";
+        document.getElementById("skip-hider60").style.display = "none";
+        document.getElementById("skip-devil60").style.display = "none";
+      }
 
       window.ZP_SYNC.init(ok => {
         if (ok && !saved.demoMode) {
@@ -343,6 +404,10 @@
               });
               updateAliveHUD();
               checkWin();
+            }
+            if (remote && remote.lastEvent && remote.lastEvent.type === "elim" && remote.lastEvent.ts > lastSeenElimTs) {
+              lastSeenElimTs = remote.lastEvent.ts;
+              showEliminationAnimation(remote.lastEvent.victimName, remote.lastEvent.victimSpriteIdx, remote.lastEvent.text);
             }
             // Non-Host clients sync authoritative Zone & Radar from Host (Checklist #10)
             if (!saved.isHost && remote && remote.gameState && G && Z) {
@@ -424,7 +489,20 @@
         if (!map.getSource("safe-zone")) {
           map.addSource("safe-zone", { type: "geojson", data: initC });
           map.addLayer({ id: "safe-zone-fill", type: "fill", source: "safe-zone", paint: { "fill-color": "#38bdf8", "fill-opacity": 0.14 } });
-          map.addLayer({ id: "safe-zone-border", type: "line", source: "safe-zone", paint: { "line-color": "#0284c7", "line-width": 3.5 } });
+          // Outer soft neon glow aura around zone
+          map.addLayer({ id: "safe-zone-glow", type: "line", source: "safe-zone", paint: { "line-color": "#38bdf8", "line-width": 14, "line-opacity": 0.30, "line-blur": 8 } });
+          // Crisp electric core border
+          map.addLayer({ id: "safe-zone-border", type: "line", source: "safe-zone", paint: { "line-color": "#7dd3fc", "line-width": 3.5 } });
+        }
+        // Jagged crackling electric lightning ring around the zone!
+        if (!map.getSource("safe-zone-lightning")) {
+          map.addSource("safe-zone-lightning", { type: "geojson", data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } } });
+          map.addLayer({
+            id: "safe-zone-lightning-line",
+            type: "line",
+            source: "safe-zone-lightning",
+            paint: { "line-color": "#e0f7ff", "line-width": 2.2, "line-opacity": 0.85 }
+          });
         }
         if (!map.getSource("next-zone")) {
           map.addSource("next-zone", { type: "geojson", data: empty });
@@ -479,7 +557,27 @@
         if (G.outOfZone) { fCol = "#ef4444"; lCol = "#dc2626"; }
         else if (Z.state === "shifting" && Z.actionType === "EXPANDING") { fCol = "#4ade80"; lCol = "#16a34a"; }
         else if (Z.state === "shifting" && Z.actionType === "CENTER_SHIFT") { fCol = "#facc15"; lCol = "#ca8a04"; }
-        if (fCol !== lastZCol) { lastZCol = fCol; map.setPaintProperty("safe-zone-fill", "fill-color", fCol); map.setPaintProperty("safe-zone-border", "line-color", lCol); }
+        if (fCol !== lastZCol) {
+          lastZCol = fCol;
+          map.setPaintProperty("safe-zone-fill", "fill-color", fCol);
+          map.setPaintProperty("safe-zone-glow", "line-color", fCol);
+          map.setPaintProperty("safe-zone-border", "line-color", lCol);
+          map.setPaintProperty("safe-zone-lightning-line", "line-color", G.outOfZone ? "#ffe07d" : "#e0f7ff");
+        }
+        // FIX #7: Animate crackling lightning bolts along the zone ring!
+        if (map.getSource("safe-zone-lightning")) {
+          const jitterAmp = (Z.state === "shifting") ? 4.5 : 1.8;
+          const pts = 48;
+          const coords = [];
+          const cosLat = Math.cos((zLat * Math.PI) / 180);
+          for (let i = 0; i <= pts; i++) {
+            const th = (i / pts) * Math.PI * 2;
+            const jag = (Math.random() - 0.5) * 2 * jitterAmp;
+            const rKm = (Z.radius + jag) / 1000;
+            coords.push([zLng + (rKm / (111.320 * cosLat)) * Math.cos(th), zLat + (rKm / 110.574) * Math.sin(th)]);
+          }
+          map.getSource("safe-zone-lightning").setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords } });
+        }
 
         if (map.getSource("next-zone")) {
           if (Z.state === "shifting") {
@@ -536,17 +634,20 @@
 
         if (me.role === "devil") {
           dock.innerHTML = `
-            <button class="gadget-card" id="g-scan">
+            <button class="gadget-card ${G.gadgets.scanCd > 0 ? "on-cd" : ""}" id="g-scan">
+              ${A.icons.scan}
               <span class="g-name">QUICK SCAN</span>
-              <span class="g-sub" id="g-scan-sub">${G.gadgets.scanCd > 0 ? G.gadgets.scanCd + "s" : "5s Ping"}</span>
+              <span class="g-sub">${G.gadgets.scanCd > 0 ? "WAIT " + G.gadgets.scanCd + "s" : "5s Reveal"}</span>
             </button>
-            <button class="gadget-card gold" id="g-lock">
+            <button class="gadget-card gold ${G.gadgets.lockCd > 0 ? "on-cd" : ""}" id="g-lock">
+              ${A.icons.lock}
               <span class="g-name">ZONE LOCK</span>
-              <span class="g-sub" id="g-lock-sub">${G.gadgets.lockCd > 0 ? G.gadgets.lockCd + "s" : "No Expand 20s"}</span>
+              <span class="g-sub">${G.gadgets.lockCd > 0 ? "WAIT " + G.gadgets.lockCd + "s" : "Stop Expand"}</span>
             </button>
             <button class="gadget-card red" id="g-catch">
+              ${A.icons.target}
               <span class="g-name">CATCH</span>
-              <span class="g-sub">Code / Dispute</span>
+              <span class="g-sub">Tag Hider</span>
             </button>`;
           document.getElementById("g-scan").onclick = () => {
             if (G.gadgets.scanCd > 0) return;
@@ -568,17 +669,20 @@
           document.getElementById("g-catch").onclick = openCatchModal;
         } else {
           dock.innerHTML = `
-            <button class="gadget-card" id="g-cloak">
+            <button class="gadget-card ${G.gadgets.cloakCd > 0 ? "on-cd" : ""}" id="g-cloak">
+              ${A.icons.cloak}
               <span class="g-name">GHOST CLOAK</span>
-              <span class="g-sub">${G.gadgets.cloakCd > 0 ? G.gadgets.cloakCd + "s" : "Hide 12s"}</span>
+              <span class="g-sub">${G.gadgets.cloakCd > 0 ? "WAIT " + G.gadgets.cloakCd + "s" : "Invisible 12s"}</span>
             </button>
-            <button class="gadget-card gold" id="g-decoy">
+            <button class="gadget-card gold ${G.gadgets.decoyCd > 0 ? "on-cd" : ""}" id="g-decoy">
+              ${A.icons.decoy}
               <span class="g-name">DECOY PING</span>
-              <span class="g-sub">${G.gadgets.decoyCd > 0 ? G.gadgets.decoyCd + "s" : "Fake 35m"}</span>
+              <span class="g-sub">${G.gadgets.decoyCd > 0 ? "WAIT " + G.gadgets.decoyCd + "s" : "Fake Pin 35m"}</span>
             </button>
-            <button class="gadget-card red" id="g-sense">
+            <button class="gadget-card red ${G.gadgets.senseCd > 0 ? "on-cd" : ""}" id="g-sense">
+              ${A.icons.sense}
               <span class="g-name">DEVIL SENSE</span>
-              <span class="g-sub">${G.gadgets.senseCd > 0 ? G.gadgets.senseCd + "s" : "Check Dist"}</span>
+              <span class="g-sub">${G.gadgets.senseCd > 0 ? "WAIT " + G.gadgets.senseCd + "s" : "Devil Dist"}</span>
             </button>`;
           document.getElementById("g-cloak").onclick = () => {
             if (G.gadgets.cloakCd > 0) return;
@@ -797,11 +901,24 @@
         document.getElementById("alive-count").textContent = hiders.filter(p => p.alive).length;
       }
 
+      let lastSeenElimTs = 0;
+      function showEliminationAnimation(victimName, victimSpriteIdx, subText) {
+        const ov = document.getElementById("elim-overlay");
+        document.getElementById("elim-devil-art").innerHTML = A.charIMG("devil", 88, 0);
+        document.getElementById("elim-victim-art").innerHTML = A.charIMG("me", 72, victimSpriteIdx || 0);
+        document.getElementById("elim-title").textContent = (victimName || "HIDER") + " ELIMINATED!";
+        document.getElementById("elim-sub").textContent = subText || "CAUGHT BY THE DEVIL";
+        ov.classList.add("show");
+        window.ZP_AUDIO.devilEliminate();
+        clearTimeout(ov._t);
+        ov._t = setTimeout(() => ov.classList.remove("show"), 2300);
+      }
+
       function eliminate(target, reason) {
         if (!target.alive || G.phase === "over") return;
         target.alive = false;
-        window.ZP_AUDIO.catchSound();
-        window.ZP_SYNC.pushCatchEvent(saved.roomCode, target.id, reason);
+        showEliminationAnimation(target.name, target.spriteIdx || 0, reason);
+        window.ZP_SYNC.pushCatchEvent(saved.roomCode, target.id, reason, target.name, target.spriteIdx || 0);
         pushFeed(reason);
         updateAliveHUD();
 
@@ -995,9 +1112,7 @@
         if (saved.isHost) {
           zoneDir.tickSecond(G.players, {
             onShift: (type, msg) => {
-              if (type === "EXPANDING") window.ZP_AUDIO.zoneExpand();
-              else if (type === "SHRINKING") window.ZP_AUDIO.zoneShrink();
-              else window.ZP_AUDIO.radarPing();
+              window.ZP_AUDIO.zoneLightning();
               pushFeed(msg);
             }
           });

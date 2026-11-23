@@ -53,10 +53,17 @@
       </div>
     </div>
 
-    <!-- Compact Demo Bot Fill (Only if user wants to add bots for testing!) -->
-    <div class="two-col">
+    <!-- DEMO ONLY Controls (Hidden in Real Play!) -->
+    <div class="two-col" id="demo-only-controls" style="display:none;">
       <button class="g-btn g-btn-dark g-btn-sm" id="btn-add-bot">+ ADD DEMO BOT</button>
-      <button class="g-btn g-btn-dark g-btn-sm" id="btn-speed">SPEED: REAL</button>
+      <button class="g-btn g-btn-dark g-btn-sm" id="btn-speed">SPEED: FAST</button>
+    </div>
+
+    <!-- REAL PLAY Ready Toggle (Visible in Real Play instead of Bot/Speed buttons!) -->
+    <div id="real-ready-wrap" style="display:none;">
+      <button class="g-btn g-btn-gold g-btn-lg" id="btn-toggle-ready" style="width:100%;">
+        TAP TO READY UP
+      </button>
     </div>
 
     <div style="margin-top:auto;">
@@ -99,6 +106,17 @@
       document.getElementById("p-max").textContent = maxP;
       document.getElementById("mode-tag").textContent = state.demoMode ? "DEMO MODE" : "REAL PLAY";
       document.getElementById("btn-speed").textContent = state.fastTimers ? "SPEED: FAST" : "SPEED: REAL";
+      // FIX #1: Show Bot/Speed ONLY in Demo Mode; in Real Play show READY button for players!
+      document.getElementById("demo-only-controls").style.display = state.demoMode ? "grid" : "none";
+      document.getElementById("real-ready-wrap").style.display = (!state.demoMode && !state.isHost) ? "block" : "none";
+      document.getElementById("btn-start").style.display = (state.isHost || state.demoMode) ? "inline-flex" : "none";
+
+      const mePl = state.players.find(p => p.id === state.myId || p.id === "me" || p.isSelf);
+      const rBtn = document.getElementById("btn-toggle-ready");
+      if (mePl && rBtn) {
+        rBtn.textContent = mePl.ready ? "READY ✓ (TAP TO UNREADY)" : "TAP TO READY UP";
+        rBtn.className = mePl.ready ? "g-btn g-btn-green g-btn-lg" : "g-btn g-btn-gold g-btn-lg";
+      }
       document.getElementById("match-meta").textContent = `${state.durationMin || 15}m • 8s PING • 20s GRACE`;
 
       const wrap = document.getElementById("slots-wrap");
@@ -117,7 +135,7 @@
             </div>
           </div>
           <div>
-            ${p.isBot ? `<button class="g-btn g-btn-red g-btn-sm" style="padding:5px 8px;" data-del="${idx}">X</button>` : `<span class="g-pill" style="color:#83e66c;">OK</span>`}
+            ${p.isBot ? `<button class="g-btn g-btn-red g-btn-sm" style="padding:5px 8px;" data-del="${idx}">X</button>` : `<span class="g-pill" style="color:${(p.isHost || p.ready) ? "#83e66c" : "#ffe07d"};">${(p.isHost || p.ready) ? "READY" : "WAIT"}</span>`}
           </div>`;
         wrap.appendChild(div);
       });
@@ -140,6 +158,15 @@
       });
     }
 
+    document.getElementById("btn-toggle-ready").onclick = () => {
+      window.ZP_AUDIO.click();
+      const mePl = state.players.find(p => p.id === state.myId || p.id === "me" || p.isSelf);
+      if (!mePl) return;
+      mePl.ready = !mePl.ready;
+      window.ZP_STATE.save(state);
+      window.ZP_SYNC.setPlayerReady(state.roomCode, mePl.id, mePl.ready);
+      render();
+    };
     document.getElementById("btn-back").onclick = () => { window.ZP_AUDIO.click(); window.location.href = "2_lobby.html"; };
     document.getElementById("btn-copy").onclick = () => {
       window.ZP_AUDIO.click();
