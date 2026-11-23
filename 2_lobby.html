@@ -33,7 +33,8 @@
       padding: 8px 6px 6px; background: rgba(9, 24, 30, 0.55);
       border: 2.5px solid var(--ink); border-radius: 12px;
     }
-    .char-slot-unit { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .char-slot-unit { display: flex; flex-direction: column; align-items: center; gap: 3px; transition: transform 0.35s ease, opacity 0.25s ease; }
+    .char-slot-unit.swap-pop { transform: translateY(-6px) scale(1.08); }
     .char-slot-tag {
       font-family: var(--font-display); font-size: 7px; background: #0c171e; color: #ffe07d;
       padding: 2px 4px; border-radius: 5px; border: 1.5px solid var(--ink);
@@ -299,6 +300,51 @@
     };
     function openModal(id) { window.ZP_AUDIO.click(); document.getElementById(id).classList.add("active"); }
 
+    let arenaSlots = null;
+    let arenaSwapTimer = null;
+
+    function buildArenaSlots(idx) {
+      arenaSlots = [
+        { type: "me", s: (idx + 1) % 6, h: 42, tag: "P2" },
+        { type: "me", s: (idx + 2) % 6, h: 44, tag: "P3" },
+        { type: "me", s: idx, h: 48, tag: "YOU" },
+        { type: "me", s: (idx + 3) % 6, h: 42, tag: "P4+" }
+      ];
+    }
+
+    function renderArenaLineup(idx, animate = false) {
+      if (!arenaSlots || !animate) buildArenaSlots(idx);
+      const lineup = document.getElementById("lineup-row");
+      lineup.innerHTML = "";
+      // Center (index 2) is ALWAYS DEVIL? while the 4 outer characters switch places!
+      const ordered = [
+        arenaSlots[0],
+        arenaSlots[1],
+        { type: "devil", s: 0, h: 58, tag: "DEVIL?" },
+        arenaSlots[2],
+        arenaSlots[3]
+      ];
+      ordered.forEach((item, i) => {
+        const u = document.createElement("div");
+        u.className = "char-slot-unit" + (animate && i !== 2 ? " swap-pop" : "");
+        u.innerHTML = `${A.charIMG(item.type, item.h, item.s)}<span class="char-slot-tag">${item.tag}</span>`;
+        lineup.appendChild(u);
+        if (animate && i !== 2) setTimeout(() => u.classList.remove("swap-pop"), 280);
+      });
+    }
+
+    function startArenaSwitcher() {
+      clearInterval(arenaSwapTimer);
+      arenaSwapTimer = setInterval(() => {
+        if (!arenaSlots || arenaSlots.length < 4) return;
+        // Rotate / swap the 4 outer heroes while keeping DEVIL? fixed in center
+        const first = arenaSlots.shift();
+        arenaSlots.push(first);
+        renderArenaLineup(state.mySpriteIdx || 0, true);
+      }, 2200);
+    }
+    window.addEventListener("pagehide", () => clearInterval(arenaSwapTimer));
+
     function syncUI() {
       state = window.ZP_STATE.load();
       closeModals();
@@ -309,20 +355,7 @@
       document.getElementById("top-cfg-chip").textContent = `3-8P • ${state.durationMin || 15}m`;
       document.getElementById("my-avatar").innerHTML = A.charIMG("me", 34, idx);
 
-      const lineup = document.getElementById("lineup-row");
-      lineup.innerHTML = "";
-      [
-        { type: "me", s: (idx + 1) % 6, h: 42, tag: "P2" },
-        { type: "me", s: (idx + 2) % 6, h: 44, tag: "P3" },
-        { type: "devil", s: 0, h: 58, tag: "DEVIL?" },
-        { type: "me", s: idx, h: 48, tag: "YOU" },
-        { type: "me", s: (idx + 3) % 6, h: 42, tag: "P4+" }
-      ].forEach(item => {
-        const u = document.createElement("div");
-        u.className = "char-slot-unit";
-        u.innerHTML = `${A.charIMG(item.type, item.h, item.s)}<span class="char-slot-tag">${item.tag}</span>`;
-        lineup.appendChild(u);
-      });
+      renderArenaLineup(idx);
     }
 
     document.getElementById("btn-swap-hero").onclick = () => {
@@ -385,7 +418,16 @@
     const rad = document.getElementById("in-rad");
     rad.oninput = () => { document.getElementById("rad-lbl").textContent = rad.value + "m"; };
 
-    // REAL PLAY: ATOMIC CREATE LIVE FIREBASE ROOM (No code overwrite / collision safe)
+    function getLiveGPS(cb) {
+      if (!("geolocation" in navigator)) { cb(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        pos => cb({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => cb(null),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 5000 }
+      );
+    }
+
+    // REAL PLAY: ATOMIC CREATE LIVE FIREBASE ROOM (Anchors Zone GPS for Zone-Only Joining!)
     document.getElementById("go-create").onclick = () => {
       window.ZP_AUDIO.click();
       state.demoMode = false;
@@ -404,13 +446,17 @@
       };
       state.players = [meObj];
       if (window.ZP_SYNC.isEnabled()) {
-        window.ZP_STATE.showToast("CREATING LIVE ROOM...");
-        window.ZP_SYNC.createRoom(state, meObj, (ok, res) => {
-          if (!ok) { window.ZP_STATE.showToast(res || "ROOM CREATE FAILED!"); return; }
-          state.roomCode = res.roomCode;
-          state.roomInstanceId = res.roomInstanceId;
-          window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
-          window.location.href = "3_room_lobby.html";
+        window.ZP_STATE.showToast("LOCKING ZONE GPS & CREATING ROOM...");
+        getLiveGPS(coords => {
+          if (coords) window.ZP_STATE.prebakeArenaProps(state, coords.lat, coords.lng);
+          else window.ZP_STATE.prebakeArenaProps(state, state.arenaMap.anchorLat, state.arenaMap.anchorLng);
+          window.ZP_SYNC.createRoom(state, meObj, (ok, res) => {
+            if (!ok) { window.ZP_STATE.showToast(res || "ROOM CREATE FAILED!"); return; }
+            state.roomCode = res.roomCode;
+            state.roomInstanceId = res.roomInstanceId;
+            window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
+            window.location.href = "3_room_lobby.html";
+          });
         });
       } else {
         state.roomCode = window.ZP_STATE.randCode(4);
@@ -420,7 +466,7 @@
       }
     };
 
-    // REAL PLAY: ATOMIC JOIN LIVE FIREBASE ROOM (Rejects CLOSED / Full / Started rooms!)
+    // REAL PLAY: ATOMIC JOIN LIVE FIREBASE ROOM (Checks Zone GPS + Rejects CLOSED/Full/Started!)
     document.getElementById("go-join").onclick = () => {
       const code = document.getElementById("in-code").value.trim();
       if (code.length < 4) { window.ZP_STATE.showToast("ENTER 4-DIGIT CODE!"); return; }
@@ -437,21 +483,23 @@
         catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
       };
       if (window.ZP_SYNC.isEnabled()) {
-        window.ZP_STATE.showToast("VALIDATING ROOM #" + code + "...");
-        window.ZP_SYNC.joinRoomAsPlayer(code, meObj, (ok, res) => {
-          if (!ok) { window.ZP_STATE.showToast(res || "COULD NOT JOIN!"); return; }
-          state.roomCode = res.roomCode;
-          state.roomInstanceId = res.roomInstanceId;
-          state.players = Object.values(res.room.players || {});
-          window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
-          window.location.href = "3_room_lobby.html";
+        window.ZP_STATE.showToast("CHECKING GPS & ROOM #" + code + "...");
+        getLiveGPS(coords => {
+          window.ZP_SYNC.joinRoomAsPlayer(code, meObj, coords, (ok, res) => {
+            if (!ok) { window.ZP_STATE.showToast(res || "COULD NOT JOIN!"); return; }
+            state.roomCode = res.roomCode;
+            state.roomInstanceId = res.roomInstanceId;
+            state.players = Object.values(res.room.players || {});
+            window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
+            window.location.href = "3_room_lobby.html";
+          });
         });
       } else {
         window.ZP_STATE.showToast("OFFLINE — USE DEMO MODE!");
       }
     };
 
-    window.addEventListener("pageshow", () => { syncUI(); if (window.ZP_SYNC.isEnabled()) checkReconnectBanner(); });
+    window.addEventListener("pageshow", () => { syncUI(); startArenaSwitcher(); if (window.ZP_SYNC.isEnabled()) checkReconnectBanner(); });
   </script>
 </body>
 </html>

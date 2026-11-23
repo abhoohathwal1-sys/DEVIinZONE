@@ -3,7 +3,7 @@
     "rooms": {
       "$roomCode": {
         ".read": true,
-        ".write": "newData.exists() && (!data.exists() || data.child('meta/status').val() != 'CLOSED' || newData.child('meta/roomInstanceId').val() != data.child('meta/roomInstanceId').val())",
+        ".write": "!newData.exists() || !data.exists() || data.child('meta/status').val() != 'CLOSED' || newData.child('meta/roomInstanceId').val() != data.child('meta/roomInstanceId').val()",
         "meta": {
           ".validate": "newData.hasChildren(['roomInstanceId', 'hostId', 'status', 'createdAt', 'durationMin', 'maxPlayers'])",
           "roomInstanceId": {

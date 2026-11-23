@@ -1,19 +1,6 @@
-DEVILinZONE (v10 — MULTIPLAYER LIFECYCLE & RECONNECTION FIXED)
-==============================================================
-
-Critical Multiplayer Fixes Implemented:
-1. Strict Room Lifecycle (WAITING | STARTING | IN_MATCH | CLOSED):
-   - Every room has a unique `roomInstanceId` + `createdAt` + atomic collision-safe `createRoom()`.
-   - `CLOSED` rooms can NEVER be reopened or rejoined with an old code.
-   - Host leaving atomically transfers `hostId` to the next connected human player or closes the room.
-2. Accurate Player Lifecycle (LOBBY | PLAYING | DISCONNECTED | LEFT | ELIMINATED | EXPIRED):
-   - Intentional exit marks player `LEFT`, removes them immediately from active gameplay/HUD/markers/win checks, and stops GPS sync.
-3. 180-Second (3-Minute) Reconnection Grace Period:
-   - Accidental exit / Back / Refresh / Background marks `DISCONNECTED` with `disconnectedAt` + `reconnectExpiresAt` (180s).
-   - Reopening within 180s restores the exact player ID, role, matchId, timers, and zone without duplicating players or rerolling Devil.
-   - After 180s, player is atomically marked `EXPIRED` and cannot rejoin.
-4. Strict Match Lifecycle (READY | STARTING | ACTIVE | ENDED | CANCELLED):
-   - Only 1 `ACTIVE` match per room instance (atomic `startMatchHost()` transaction).
-   - `PLAY AGAIN` checks Firebase authoritative `match.status === "ENDED"` — never creates a duplicate match while an active match is running.
-5. Updated `firebase_rules.json`:
-   - Paste into Firebase Console -> Realtime Database -> Rules -> Publish.
+DEVILinZONE (v11 — BUG FIXES)
+=============================
+1. Fixed false "ROOM NOT FOUND!" bug by pre-reading Firebase room before atomic transaction; host leaving shifts host to next player, and if no host/player remains the room is completely removed from Firebase.
+2. Map character markers now show ONLY the pixel character sprites (no name tags).
+3. REAL-WORLD ARENA lineup in Lobby smoothly switches the 4 outer characters' positions every 2.2s while keeping DEVIL? fixed in the center.
+4. Zone-only joining: Host locks zone GPS on room creation, and joining players' GPS distance is validated so only players inside the zone radius can join.

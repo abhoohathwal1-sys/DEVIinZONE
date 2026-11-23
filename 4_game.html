@@ -576,9 +576,8 @@
         img.src = A.charSrc(isDevil ? "devil" : "me", p.spriteIdx ?? 0);
         img.style.height = computeRoadHeight(isDevil) + "px";
         wrap.appendChild(sh); wrap.appendChild(img);
-        const lbl = document.createElement("div"); lbl.className = "rpg-name";
-        lbl.textContent = labelOverride || (isSelf ? (isDevil ? "DEVIL(YOU)" : "YOU") : (isDevil ? "DEVIL" : p.name));
-        root.appendChild(wrap); root.appendChild(lbl);
+        // FIX #2: Map par sirf character dikhega, naam nahi!
+        root.appendChild(wrap);
         const marker = new maplibregl.Marker({ element: root, anchor: "bottom" }).setLngLat(metersToLngLat(p.x, p.y)).addTo(map);
         return { marker, imgEl: img };
       }
