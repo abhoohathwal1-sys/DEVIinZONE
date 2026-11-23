@@ -96,6 +96,17 @@
       <span class="g-pill" style="background:#142630; color:#83e66c;">RULES</span>
     </div>
 
+    <!-- 3-MINUTE RECONNECT BANNER (Shown automatically if player accidentally exited an active match!) -->
+    <div class="g-panel" id="reconnect-banner" style="display:none; padding:10px 12px; border-color:#83e66c; background:#102b20;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <div>
+          <div style="font-family:var(--font-display); font-size:9px; color:#83e66c;">ACTIVE MATCH FOUND!</div>
+          <div style="font-size:10.5px; color:#d9f2e4; margin-top:3px;" id="reconnect-sub">Room #---- • Reconnect within 3 min</div>
+        </div>
+        <button class="g-btn g-btn-green g-btn-sm" id="btn-reconnect-now">RECONNECT</button>
+      </div>
+    </div>
+
     <!-- Squad Stage -->
     <div class="g-panel stage-box">
       <div style="width:100%; display:flex; justify-content:space-between;">
@@ -217,8 +228,70 @@
     let chosenDur = state.durationMin || 15;
     let chosenMaxP = state.maxPlayers || 5;
 
+    let pendingReconnect = null;
+    function checkReconnectBanner() {
+      const s = window.ZP_STATE.load();
+      const banner = document.getElementById("reconnect-banner");
+      if (!window.ZP_SYNC.isEnabled() || !s.activeSession || s.demoMode) {
+        banner.style.display = "none";
+        return;
+      }
+      window.ZP_SYNC.checkAndReconnectSession(s.activeSession, res => {
+        if (res.status === "RECONNECT_MATCH" || res.status === "RECONNECT_LOBBY") {
+          pendingReconnect = res;
+          banner.style.display = "block";
+          document.getElementById("reconnect-sub").textContent =
+            `Room #${s.activeSession.roomCode} • ${res.status === "RECONNECT_MATCH" ? "Match ACTIVE" : "Lobby WAITING"}`;
+        } else if (res.status === "MATCH_ENDED") {
+          pendingReconnect = res;
+          banner.style.display = "block";
+          document.getElementById("reconnect-sub").textContent = `Room #${s.activeSession.roomCode} • Match ENDED (View Result)`;
+        } else {
+          pendingReconnect = null;
+          banner.style.display = "none";
+          if (res.status === "EXPIRED") {
+            window.ZP_STATE.clearActiveSession(s);
+            window.ZP_STATE.showToast("RECONNECT WINDOW (3 MIN) EXPIRED");
+          } else if (res.status === "CLOSED" || res.status === "LEFT_OR_EXPIRED") {
+            window.ZP_STATE.clearActiveSession(s);
+          }
+        }
+      });
+    }
+
+    document.getElementById("btn-reconnect-now").onclick = () => {
+      if (!pendingReconnect) return;
+      window.ZP_AUDIO.click();
+      const s = window.ZP_STATE.load();
+      const room = pendingReconnect.room;
+      if (room && room.meta) {
+        s.roomCode = room.meta.code || s.activeSession.roomCode;
+        s.roomInstanceId = room.meta.roomInstanceId;
+        s.isHost = room.meta.hostId === s.myId;
+        s.durationMin = room.meta.durationMin;
+        s.maxPlayers = room.meta.maxPlayers;
+        s.startRadius = room.meta.startRadius;
+        if (room.arenaMap && room.arenaMap.ready) s.arenaMap = room.arenaMap;
+        if (room.match) {
+          s.matchId = room.match.matchId;
+          s.syncedDevilId = room.match.devilId || "";
+        }
+        if (room.players) {
+          s.players = Object.values(room.players);
+          s.players.forEach(p => { if (p.id === s.myId) p.isSelf = true; });
+        }
+        window.ZP_STATE.save(s);
+      }
+      if (pendingReconnect.status === "RECONNECT_LOBBY") {
+        window.location.href = "3_room_lobby.html";
+      } else {
+        window.location.href = "4_game.html";
+      }
+    };
+
     window.ZP_SYNC.init(ok => {
       document.getElementById("fb-status").textContent = ok ? "FIREBASE LIVE" : "REAL PLAY (LOCAL)";
+      if (ok) checkReconnectBanner();
     });
 
     window.closeModals = function () {
@@ -312,34 +385,42 @@
     const rad = document.getElementById("in-rad");
     rad.oninput = () => { document.getElementById("rad-lbl").textContent = rad.value + "m"; };
 
-    // REAL PLAY: CREATE LIVE FIREBASE ROOM
+    // REAL PLAY: ATOMIC CREATE LIVE FIREBASE ROOM (No code overwrite / collision safe)
     document.getElementById("go-create").onclick = () => {
       window.ZP_AUDIO.click();
       state.demoMode = false;
       state.fastTimers = false;
       state.isHost = true;
-      state.roomCode = window.ZP_STATE.randCode(4);
       state.durationMin = chosenDur;
       state.maxPlayers = chosenMaxP;
       state.startRadius = parseInt(rad.value, 10);
       state.roleMode = "random";
+      state.matchId = "";
+      state.syncedDevilId = "";
       const meObj = {
-        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: true, role: "pending",
+        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: true,
+        status: "LOBBY", role: "pending", alive: true, ready: true,
         catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
       };
       state.players = [meObj];
-      window.ZP_STATE.save(state);
       if (window.ZP_SYNC.isEnabled()) {
-        window.ZP_STATE.showToast("CREATING LIVE ROOM #" + state.roomCode + "...");
-        window.ZP_SYNC.createRoom(state.roomCode, state, meObj, (ok) => {
+        window.ZP_STATE.showToast("CREATING LIVE ROOM...");
+        window.ZP_SYNC.createRoom(state, meObj, (ok, res) => {
+          if (!ok) { window.ZP_STATE.showToast(res || "ROOM CREATE FAILED!"); return; }
+          state.roomCode = res.roomCode;
+          state.roomInstanceId = res.roomInstanceId;
+          window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
           window.location.href = "3_room_lobby.html";
         });
       } else {
+        state.roomCode = window.ZP_STATE.randCode(4);
+        state.roomInstanceId = window.ZP_STATE.genUniqueId("ri");
+        window.ZP_STATE.save(state);
         window.location.href = "3_room_lobby.html";
       }
     };
 
-    // REAL PLAY: JOIN LIVE FIREBASE ROOM
+    // REAL PLAY: ATOMIC JOIN LIVE FIREBASE ROOM (Rejects CLOSED / Full / Started rooms!)
     document.getElementById("go-join").onclick = () => {
       const code = document.getElementById("in-code").value.trim();
       if (code.length < 4) { window.ZP_STATE.showToast("ENTER 4-DIGIT CODE!"); return; }
@@ -347,26 +428,30 @@
       state.demoMode = false;
       state.fastTimers = false;
       state.isHost = false;
-      state.roomCode = code;
       state.roleMode = "random";
+      state.matchId = "";
+      state.syncedDevilId = "";
       const meObj = {
-        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: false, role: "pending",
+        id: state.myId, name: state.playerName, isSelf: true, isBot: false, isHost: false,
+        status: "LOBBY", role: "pending", alive: true, ready: false,
         catchCode: window.ZP_STATE.randCode(4), spriteIdx: state.mySpriteIdx || 0
       };
-      state.players = [meObj];
-      window.ZP_STATE.save(state);
       if (window.ZP_SYNC.isEnabled()) {
-        window.ZP_STATE.showToast("JOINING ROOM #" + code + "...");
-        window.ZP_SYNC.joinRoomAsPlayer(code, meObj, (ok, info) => {
-          if (!ok) { window.ZP_STATE.showToast(info || "COULD NOT JOIN!"); return; }
+        window.ZP_STATE.showToast("VALIDATING ROOM #" + code + "...");
+        window.ZP_SYNC.joinRoomAsPlayer(code, meObj, (ok, res) => {
+          if (!ok) { window.ZP_STATE.showToast(res || "COULD NOT JOIN!"); return; }
+          state.roomCode = res.roomCode;
+          state.roomInstanceId = res.roomInstanceId;
+          state.players = Object.values(res.room.players || {});
+          window.ZP_STATE.setActiveSession(state, { roomCode: res.roomCode, roomInstanceId: res.roomInstanceId, matchId: "", screen: "lobby" });
           window.location.href = "3_room_lobby.html";
         });
       } else {
-        window.location.href = "3_room_lobby.html";
+        window.ZP_STATE.showToast("OFFLINE — USE DEMO MODE!");
       }
     };
 
-    window.addEventListener("pageshow", syncUI);
+    window.addEventListener("pageshow", () => { syncUI(); if (window.ZP_SYNC.isEnabled()) checkReconnectBanner(); });
   </script>
 </body>
 </html>

@@ -331,6 +331,20 @@
       <div style="font-family:var(--font-display); font-size:10px; color:#ffe07d;" id="elim-sub">CAUGHT BY THE DEVIL</div>
     </div>
 
+    <!-- INTENTIONAL LEAVE CONFIRMATION MODAL (Separates Intentional Leave from Accidental Back!) -->
+    <div class="g-modal-bg" id="m-leave">
+      <div class="g-panel g-modal-card" style="text-align:center;">
+        <div style="font-family:var(--font-display); font-size:11px; color:#ff7c7c; margin-bottom:10px;">LEAVE MATCH?</div>
+        <div style="font-size:11.5px; color:#cfe0ee; margin-bottom:14px;">
+          Leaving permanently removes you from this match. (Accidental close allows 3-min reconnect.)
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="g-btn g-btn-dark g-btn-sm" id="btn-stay-match">STAY</button>
+          <button class="g-btn g-btn-red g-btn-sm" id="btn-confirm-leave">LEAVE</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ZERO-FREEZE RESULT SCREEN -->
     <div class="result-screen" id="result-screen">
       <div class="g-card-warm g-modal-card" style="text-align:center;">
@@ -387,38 +401,80 @@
         document.getElementById("skip-devil60").style.display = "none";
       }
 
-      window.ZP_SYNC.init(ok => {
-        if (ok && !saved.demoMode) {
-          window.ZP_SYNC.joinRoom(saved.roomCode, remote => {
-            // Sync remote players' live GPS & caught status
-            if (remote && remote.players && G) {
-              G.players.forEach(p => {
-                if (p.id === me.id || p.isBot) return;
-                const rp = remote.players[p.id];
-                if (rp) {
-                  if (typeof rp.x === "number") p.x = rp.x;
-                  if (typeof rp.y === "number") p.y = rp.y;
-                  if (typeof rp.alive === "boolean") p.alive = rp.alive;
-                  p.cloakedSec = rp.cloaked ? 5 : 0;
-                }
-              });
-              updateAliveHUD();
-              checkWin();
+      let intentionalExit = false;
+      let sweepCounter = 0;
+
+      function isPlayerActiveInGame(p) {
+        return p && p.status !== "LEFT" && p.status !== "EXPIRED";
+      }
+
+      function attachAuthoritativeListener() {
+        if (!window.ZP_SYNC.isEnabled() || saved.demoMode || !saved.roomCode) return;
+        window.ZP_SYNC.bindPresence(saved.roomCode, saved.roomInstanceId, saved.myId, me && !me.alive ? "ELIMINATED" : "PLAYING");
+        window.ZP_SYNC.joinRoomListener(saved.roomCode, remote => {
+          if (!remote || !remote.meta) return;
+          // Ignore stale/different room instance!
+          if (saved.roomInstanceId && remote.meta.roomInstanceId !== saved.roomInstanceId) return;
+          if (remote.meta.status === "CLOSED") {
+            endGame("ROOM CLOSED", "All players left the room.");
+            return;
+          }
+
+          // Update host status dynamically if host transferred!
+          saved.isHost = (remote.meta.hostId === saved.myId);
+
+          // Sync authoritative match end from Host
+          if (remote.match && remote.match.status === "ENDED" && G && G.phase !== "over") {
+            endGame(remote.match.winnerTitle || "MATCH ENDED", remote.match.winnerDesc || "Match has officially ended.");
+            return;
+          }
+
+          // Sync remote players' lifecycle status (LEFT / EXPIRED / DISCONNECTED / ELIMINATED / PLAYING)
+          if (remote.players && G) {
+            G.players.forEach(p => {
+              if (p.isBot) return;
+              const rp = remote.players[p.id];
+              if (!rp) return;
+              p.status = rp.status || p.status;
+              if (p.status === "LEFT" || p.status === "EXPIRED") {
+                p.alive = false;
+                if (mapMarkers[p.id]) { mapMarkers[p.id].marker.remove(); delete mapMarkers[p.id]; }
+                return;
+              }
+              if (p.id !== me.id) {
+                if (typeof rp.x === "number") p.x = rp.x;
+                if (typeof rp.y === "number") p.y = rp.y;
+                if (typeof rp.alive === "boolean") p.alive = rp.alive;
+                p.cloakedSec = rp.cloaked ? 5 : 0;
+              }
+            });
+            updateAliveHUD();
+            checkWin();
+          }
+
+          if (remote.lastEvent && remote.lastEvent.type === "elim" && remote.lastEvent.ts > lastSeenElimTs) {
+            lastSeenElimTs = remote.lastEvent.ts;
+            showEliminationAnimation(remote.lastEvent.victimName, remote.lastEvent.victimSpriteIdx, remote.lastEvent.text);
+          }
+
+          // Non-Host clients sync authoritative Zone, Radar & Timers from Host's match node
+          if (!saved.isHost && remote.match && remote.match.status === "ACTIVE" && G && Z) {
+            const m = remote.match;
+            if (m.matchId === saved.matchId) {
+              G.radarRevealed = !!m.radarRevealed;
+              if (typeof m.matchSecLeft === "number") G.matchSecLeft = m.matchSecLeft;
+              if (typeof m.radarTimer === "number") G.radarTimer = m.radarTimer;
+              if (m.zone) {
+                Z.cx = m.zone.cx; Z.cy = m.zone.cy; Z.radius = m.zone.radius;
+                Z.targetCx = m.zone.targetCx; Z.targetCy = m.zone.targetCy; Z.targetRadius = m.zone.targetRadius;
+                Z.state = m.zone.state; Z.actionType = m.zone.actionType;
+                Z.stateTimer = m.zone.stateTimer; Z.centerShiftTimer = m.zone.centerShiftTimer;
+                Z.expandsUsed = m.zone.expandsUsed || 0;
+              }
             }
-            if (remote && remote.lastEvent && remote.lastEvent.type === "elim" && remote.lastEvent.ts > lastSeenElimTs) {
-              lastSeenElimTs = remote.lastEvent.ts;
-              showEliminationAnimation(remote.lastEvent.victimName, remote.lastEvent.victimSpriteIdx, remote.lastEvent.text);
-            }
-            // Non-Host clients sync authoritative Zone & Radar from Host (Checklist #10)
-            if (!saved.isHost && remote && remote.gameState && G && Z) {
-              const gs = remote.gameState;
-              Z.cx = gs.cx; Z.cy = gs.cy; Z.radius = gs.radius;
-              G.radarRevealed = !!gs.radarRevealed;
-              G.matchSecLeft = gs.matchSecLeft;
-            }
-          });
-        }
-      });
+          }
+        });
+      }
 
       function metersToLngLat(mx, my) {
         return [anchorLng + mx / (111320 * Math.cos((anchorLat * Math.PI) / 180)), anchorLat - my / 111320];
@@ -596,7 +652,7 @@
         G.players.forEach(p => {
           const isSelf = p.id === me.id, isDevil = p.role === "devil";
           const hiddenByCloak = !isSelf && !isSpectator && p.cloakedSec > 0;
-          const vis = p.alive && !hiddenByCloak && (isSelf || isSpectator || G.radarRevealed || (G.phase === "hide60" && isDevil));
+          const vis = isPlayerActiveInGame(p) && p.alive && !hiddenByCloak && (isSelf || isSpectator || G.radarRevealed || (G.phase === "hide60" && isDevil));
           const ll = metersToLngLat(p.x, p.y);
           if (vis) {
             if (!mapMarkers[p.id]) mapMarkers[p.id] = createCharMarker(p);
@@ -753,7 +809,11 @@
       }
       function fullTeardown() {
         stopAllLoops();
-        window.ZP_SYNC.leaveRoom();
+        if (!intentionalExit && !saved.demoMode && window.ZP_SYNC.isEnabled() && saved.roomCode && saved.roomInstanceId && G && G.phase !== "over") {
+          // Accidental exit / Back / Refresh -> mark DISCONNECTED with 180s reconnect window!
+          window.ZP_SYNC.markTemporaryDisconnect(saved.roomCode, saved.roomInstanceId, saved.myId);
+        }
+        window.ZP_SYNC.leaveRoomListener();
         if (gpsWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
       }
       window.addEventListener("pagehide", fullTeardown);
@@ -897,7 +957,7 @@
       function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
       function updateAliveHUD() {
-        const hiders = G.players.filter(p => p.role === "hider");
+        const hiders = G.players.filter(p => p.role === "hider" && isPlayerActiveInGame(p));
         document.getElementById("alive-count").textContent = hiders.filter(p => p.alive).length;
       }
 
@@ -918,7 +978,7 @@
         if (!target.alive || G.phase === "over") return;
         target.alive = false;
         showEliminationAnimation(target.name, target.spriteIdx || 0, reason);
-        window.ZP_SYNC.pushCatchEvent(saved.roomCode, target.id, reason, target.name, target.spriteIdx || 0);
+        window.ZP_SYNC.pushCatchEvent(saved.roomCode, saved.roomInstanceId, saved.matchId, target.id, reason, target.name, target.spriteIdx || 0);
         pushFeed(reason);
         updateAliveHUD();
 
@@ -934,27 +994,69 @@
 
       function checkWin() {
         if (!G || G.phase === "over") return;
-        const hiders = G.players.filter(p => p.role === "hider");
+        const hiders = G.players.filter(p => p.role === "hider" && isPlayerActiveInGame(p));
         const alive = hiders.filter(p => p.alive);
-        const devil = G.players.find(p => p.role === "devil");
+        const devil = G.players.find(p => p.role === "devil" && isPlayerActiveInGame(p));
         if (alive.length === 0) endGame("DEVIL WINS!", `${devil.name} caught all ${hiders.length} Hiders!`);
-        else if (!devil.alive) endGame("HIDERS WIN!", `Devil (${devil.name}) terminated outside zone!`);
+        else if (!devil || !devil.alive) endGame("HIDERS WIN!", `Devil is out of the match!`);
         else if (G.matchSecLeft <= 0) endGame("HIDERS WIN!", `Time up! ${alive.length} Hider(s) survived!`);
       }
 
       function endGame(title, desc) {
-        G.phase = "over";
+        if (G) G.phase = "over";
         stopAllLoops();
+        if (saved.isHost && !saved.demoMode && window.ZP_SYNC.isEnabled() && saved.matchId) {
+          window.ZP_SYNC.endMatchHost(saved.roomCode, saved.roomInstanceId, saved.matchId, title, desc);
+        }
         if (map) { try { map.dragPan.disable(); map.touchZoomRotate.disable(); } catch (e) {} }
         document.getElementById("m-catch").classList.remove("active");
+        document.getElementById("m-leave").classList.remove("active");
         document.getElementById("pocket-screen").classList.remove("show");
         document.getElementById("res-title").textContent = title;
         document.getElementById("res-desc").textContent = desc;
         document.getElementById("result-screen").classList.add("show");
       }
 
-      document.getElementById("res-btn-again").onclick = e => { e.stopPropagation(); window.ZP_AUDIO.click(); initNewMatch(); };
-      document.getElementById("res-btn-lobby").onclick = e => { e.stopPropagation(); window.ZP_AUDIO.click(); fullTeardown(); window.location.href = "3_room_lobby.html"; };
+      // Bug 4 Fix: PLAY AGAIN validates Firebase authoritative match.status === "ENDED"!
+      document.getElementById("res-btn-again").onclick = e => {
+        e.stopPropagation();
+        window.ZP_AUDIO.click();
+        if (saved.demoMode || !window.ZP_SYNC.isEnabled()) {
+          initNewMatch();
+          return;
+        }
+        window.ZP_SYNC.requestMatchAgain(saved.roomCode, saved.roomInstanceId, saved.myId, outcome => {
+          if (outcome === "MATCH_STILL_ACTIVE") {
+            window.ZP_STATE.showToast("ORIGINAL MATCH STILL ACTIVE!");
+            return;
+          }
+          if (outcome === "ROOM_CLOSED") {
+            window.ZP_STATE.clearActiveSession(saved);
+            window.location.href = "2_lobby.html";
+            return;
+          }
+          // Match is officially ENDED -> return to Room Lobby to start a fresh match!
+          intentionalExit = true;
+          saved.matchId = "";
+          saved.syncedDevilId = "";
+          window.ZP_STATE.setActiveSession(saved, { roomCode: saved.roomCode, roomInstanceId: saved.roomInstanceId, matchId: "", screen: "lobby" });
+          window.location.href = "3_room_lobby.html";
+        });
+      };
+
+      document.getElementById("res-btn-lobby").onclick = e => {
+        e.stopPropagation();
+        window.ZP_AUDIO.click();
+        intentionalExit = true;
+        if (!saved.demoMode && window.ZP_SYNC.isEnabled()) {
+          window.ZP_SYNC.leaveRoomIntentionally(saved.roomCode, saved.roomInstanceId, saved.myId, () => {
+            window.ZP_STATE.clearActiveSession(saved);
+            window.location.href = "2_lobby.html";
+          });
+        } else {
+          window.location.href = "2_lobby.html";
+        }
+      };
 
       // CATCH CODE + BACKUP DISPUTE TAG (Checklist #3)
       function openCatchModal() {
@@ -1022,7 +1124,7 @@
         }
         if (G.phase === "hunt") zoneDir.stepFrame(dt);
 
-        const devil = G.players.find(p => p.role === "devil");
+        const devil = G.players.find(p => p.role === "devil" && isPlayerActiveInGame(p));
         G.players.forEach(p => {
           if (!p.isBot || !p.alive) return;
           const dZ = Math.hypot(p.x - Z.cx, p.y - Z.cy);
@@ -1070,13 +1172,25 @@
         if (G.decoy && G.decoy.secLeft > 0) G.decoy.secLeft--;
         renderGadgetDock();
 
-        // Throttled 2s Firebase MVP Sync (Checklist #10, #11, #12)
-        window.ZP_SYNC.pushMyLocation(saved.roomCode, me.id, { x: me.x, y: me.y, alive: me.alive, cloaked: me.cloakedSec > 0 });
-        if (saved.isHost) {
-          window.ZP_SYNC.pushHostState(saved.roomCode, {
-            phase: G.phase, matchSecLeft: G.matchSecLeft, radarRevealed: G.radarRevealed,
-            cx: Z.cx, cy: Z.cy, radius: Z.radius
-          });
+        // Throttled 2s Firebase Sync (Protected by roomInstanceId & matchId!)
+        if (!saved.demoMode && window.ZP_SYNC.isEnabled() && me.status !== "LEFT" && me.status !== "EXPIRED") {
+          window.ZP_SYNC.pushMyLocation(saved.roomCode, saved.roomInstanceId, me.id, { x: me.x, y: me.y, cloaked: me.cloakedSec > 0 });
+          if (saved.isHost && saved.matchId) {
+            window.ZP_SYNC.pushHostState(saved.roomCode, saved.roomInstanceId, saved.matchId, {
+              phase: G.phase, matchSecLeft: G.matchSecLeft, hideSecLeft: G.hideSecLeft,
+              radarRevealed: G.radarRevealed, radarTimer: G.radarTimer,
+              zone: {
+                cx: Z.cx, cy: Z.cy, radius: Z.radius,
+                targetCx: Z.targetCx, targetCy: Z.targetCy, targetRadius: Z.targetRadius,
+                state: Z.state, actionType: Z.actionType, stateTimer: Z.stateTimer,
+                centerShiftTimer: Z.centerShiftTimer, expandsUsed: Z.expandsUsed
+              }
+            });
+            // Every 5s, Host sweeps >180s DISCONNECTED players -> EXPIRED & handles host transfer
+            if (++sweepCounter % 5 === 0) {
+              window.ZP_SYNC.sweepExpiredPlayers(saved.roomCode, saved.roomInstanceId);
+            }
+          }
         }
 
         if (G.phase === "hide60") {
@@ -1184,7 +1298,28 @@
         if (map && mapLoaded && me) map.flyTo({ center: metersToLngLat(me.x, me.y), zoom: 17.5, pitch: is3D ? 60 : 0, duration: 600 });
       };
       document.getElementById("btn-exit").onclick = () => {
-        window.ZP_AUDIO.click(); fullTeardown(); window.location.href = "3_room_lobby.html";
+        window.ZP_AUDIO.click();
+        if (saved.demoMode) {
+          fullTeardown();
+          window.location.href = "3_room_lobby.html";
+          return;
+        }
+        document.getElementById("m-leave").classList.add("active");
+      };
+      document.getElementById("btn-stay-match").onclick = () => {
+        window.ZP_AUDIO.click();
+        document.getElementById("m-leave").classList.remove("active");
+      };
+      document.getElementById("btn-confirm-leave").onclick = () => {
+        window.ZP_AUDIO.click();
+        intentionalExit = true;
+        document.getElementById("m-leave").classList.remove("active");
+        stopAllLoops();
+        if (gpsWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+        window.ZP_SYNC.leaveRoomIntentionally(saved.roomCode, saved.roomInstanceId, saved.myId, () => {
+          window.ZP_STATE.clearActiveSession(saved);
+          window.location.href = "2_lobby.html";
+        });
       };
 
       let lastFrame = performance.now();
@@ -1206,9 +1341,83 @@
         mainRafId = requestAnimationFrame(loop);
       }
 
+      function restoreActiveMatchFromFirebase(room) {
+        saved.roomInstanceId = room.meta.roomInstanceId;
+        saved.isHost = (room.meta.hostId === saved.myId);
+        saved.matchId = room.match.matchId;
+        saved.syncedDevilId = room.match.devilId;
+        if (room.players) {
+          saved.players = Object.values(room.players);
+          saved.players.forEach(p => { if (p.id === saved.myId) p.isSelf = true; });
+        }
+        window.ZP_STATE.save(saved);
+
+        initNewMatch();
+        // Restore authoritative timers, zone & phase without re-running intro if already past intro!
+        if (room.match.zone && Z) Object.assign(Z, room.match.zone);
+        if (typeof room.match.matchSecLeft === "number") G.matchSecLeft = room.match.matchSecLeft;
+        if (typeof room.match.radarTimer === "number") G.radarTimer = room.match.radarTimer;
+        G.radarRevealed = !!room.match.radarRevealed;
+
+        // Restore player alive/eliminated state
+        if (room.players) {
+          G.players.forEach(p => {
+            const rp = room.players[p.id];
+            if (rp) {
+              p.x = rp.x || p.x; p.y = rp.y || p.y;
+              p.alive = !!rp.alive; p.status = rp.status || p.status;
+            }
+          });
+        }
+
+        // If match already passed intro, skip intro and resume directly!
+        if (room.match.phase === "hunt" || room.match.phase === "hide60") {
+          if (introCtrl) { introCtrl.destroy(); introCtrl = null; }
+          document.getElementById("intro-stage").classList.add("hidden");
+          if (room.match.phase === "hunt") {
+            G.phase = "hunt"; G.hideSecLeft = 0;
+            startLoops();
+          } else {
+            G.hideSecLeft = room.match.hideSecLeft || 30;
+            beginHide60();
+          }
+          pushFeed("RECONNECTED TO ACTIVE MATCH!");
+        }
+        attachAuthoritativeListener();
+      }
+
       loadMapLibreAsync();
       startGPS();
-      initNewMatch();
+
+      if (saved.demoMode) {
+        initNewMatch();
+      } else {
+        window.ZP_SYNC.init(ok => {
+          if (!ok) { initNewMatch(); return; }
+          if (saved.activeSession && saved.activeSession.roomCode) {
+            window.ZP_SYNC.checkAndReconnectSession(saved.activeSession, res => {
+              if (res.status === "MATCH_ENDED") {
+                initNewMatch();
+                if (introCtrl) { introCtrl.destroy(); introCtrl = null; }
+                document.getElementById("intro-stage").classList.add("hidden");
+                endGame(res.room.match.winnerTitle || "MATCH ENDED", res.room.match.winnerDesc || "Match has ended.");
+              } else if (res.status === "RECONNECT_MATCH") {
+                restoreActiveMatchFromFirebase(res.room);
+              } else if (res.status === "EXPIRED" || res.status === "CLOSED" || res.status === "LEFT_OR_EXPIRED") {
+                window.ZP_STATE.clearActiveSession(saved);
+                window.ZP_STATE.showToast("SESSION EXPIRED OR CLOSED");
+                setTimeout(() => { window.location.href = "2_lobby.html"; }, 900);
+              } else {
+                initNewMatch();
+                attachAuthoritativeListener();
+              }
+            });
+          } else {
+            initNewMatch();
+            attachAuthoritativeListener();
+          }
+        });
+      }
     })();
   </script>
 </body>

@@ -111,7 +111,7 @@
       document.getElementById("real-ready-wrap").style.display = (!state.demoMode && !state.isHost) ? "block" : "none";
       document.getElementById("btn-start").style.display = (state.isHost || state.demoMode) ? "inline-flex" : "none";
 
-      const mePl = state.players.find(p => p.id === state.myId || p.id === "me" || p.isSelf);
+      const mePl = state.players.find(p => p.id === state.myId || (p.id === state.myId || p.id === "me" || p.isSelf) || p.isSelf);
       const rBtn = document.getElementById("btn-toggle-ready");
       if (mePl && rBtn) {
         rBtn.textContent = mePl.ready ? "READY ✓ (TAP TO UNREADY)" : "TAP TO READY UP";
@@ -121,15 +121,17 @@
 
       const wrap = document.getElementById("slots-wrap");
       wrap.innerHTML = "";
-      state.players.forEach((p, idx) => {
+      const visiblePlayers = state.players.filter(p => p && p.status !== "LEFT" && p.status !== "EXPIRED");
+      document.getElementById("p-count").textContent = visiblePlayers.length;
+      visiblePlayers.forEach((p, idx) => {
         const div = document.createElement("div");
-        div.className = "slot-card" + (p.id === "me" ? " me" : "");
+        div.className = "slot-card" + ((p.id === state.myId || p.id === "me" || p.isSelf) ? " me" : "");
         div.innerHTML = `
           <div class="slot-left">
             ${A.charIMG("me", 36, p.spriteIdx ?? idx)}
             <div>
-              <div style="font-family:var(--font-display); font-size:9px; color:${p.id === "me" ? "#ffe07d" : "#fff"};">
-                ${p.name} ${p.id === "me" ? "(YOU)" : ""}
+              <div style="font-family:var(--font-display); font-size:9px; color:${(p.id === state.myId || p.id === "me" || p.isSelf) ? "#ffe07d" : "#fff"};">
+                ${p.name} ${(p.id === state.myId || p.id === "me" || p.isSelf) ? "(YOU)" : ""}
               </div>
               <div style="font-size:10px; color:#83e66c; margin-top:2px;">${p.isBot ? "DEMO BOT" : (p.isHost ? "HOST • READY" : "PLAYER • READY")}</div>
             </div>
@@ -140,7 +142,7 @@
         wrap.appendChild(div);
       });
 
-      for (let i = state.players.length; i < maxP; i++) {
+      for (let i = visiblePlayers.length; i < maxP; i++) {
         const empty = document.createElement("div");
         empty.className = "slot-card";
         empty.style.opacity = "0.55";
@@ -160,14 +162,25 @@
 
     document.getElementById("btn-toggle-ready").onclick = () => {
       window.ZP_AUDIO.click();
-      const mePl = state.players.find(p => p.id === state.myId || p.id === "me" || p.isSelf);
+      const mePl = state.players.find(p => p.id === state.myId || (p.id === state.myId || p.id === "me" || p.isSelf) || p.isSelf);
       if (!mePl) return;
       mePl.ready = !mePl.ready;
       window.ZP_STATE.save(state);
-      window.ZP_SYNC.setPlayerReady(state.roomCode, mePl.id, mePl.ready);
+      window.ZP_SYNC.setPlayerReady(state.roomCode, state.roomInstanceId, mePl.id, mePl.ready);
       render();
     };
-    document.getElementById("btn-back").onclick = () => { window.ZP_AUDIO.click(); window.location.href = "2_lobby.html"; };
+    document.getElementById("btn-back").onclick = () => {
+      window.ZP_AUDIO.click();
+      if (!state.demoMode && window.ZP_SYNC.isEnabled() && state.roomCode && state.roomInstanceId) {
+        window.ZP_SYNC.leaveRoomIntentionally(state.roomCode, state.roomInstanceId, state.myId, () => {
+          window.ZP_STATE.clearActiveSession(state);
+          window.location.href = "2_lobby.html";
+        });
+      } else {
+        window.ZP_STATE.clearActiveSession(state);
+        window.location.href = "2_lobby.html";
+      }
+    };
     document.getElementById("btn-copy").onclick = () => {
       window.ZP_AUDIO.click();
       try { if (navigator.clipboard) navigator.clipboard.writeText(state.roomCode); } catch (e) {}
@@ -188,11 +201,20 @@
       window.ZP_STATE.save(state);
       render();
     };
-    // Live Multi-Phone Firebase Room Sync
+    // Live Multi-Phone Firebase Authoritative Room Sync (v10)
     window.ZP_SYNC.init(ok => {
-      if (!ok || state.demoMode) return;
-      window.ZP_SYNC.joinRoom(state.roomCode, room => {
-        if (!room || !room.meta) return;
+      if (!ok || state.demoMode || !state.roomCode) return;
+      window.ZP_SYNC.bindPresence(state.roomCode, state.roomInstanceId, state.myId, "LOBBY");
+      window.ZP_SYNC.joinRoomListener(state.roomCode, room => {
+        if (!room || !room.meta || (state.roomInstanceId && room.meta.roomInstanceId !== state.roomInstanceId) || room.meta.status === "CLOSED") {
+          window.ZP_STATE.showToast("ROOM CLOSED!");
+          window.ZP_STATE.clearActiveSession(state);
+          window.ZP_SYNC.leaveRoomListener();
+          setTimeout(() => { window.location.href = "2_lobby.html"; }, 900);
+          return;
+        }
+        state.roomInstanceId = room.meta.roomInstanceId;
+        state.isHost = room.meta.hostId === state.myId;
         state.durationMin = room.meta.durationMin || state.durationMin;
         state.maxPlayers = room.meta.maxPlayers || state.maxPlayers;
         state.startRadius = room.meta.startRadius || state.startRadius;
@@ -203,12 +225,18 @@
         window.ZP_STATE.save(state);
         render();
 
-        // When Host starts the match, ALL phones launch 4_game.html together!
-        if (room.meta.status === "playing" && !busy) {
+        // When Host atomically starts match (IN_MATCH + ACTIVE), ALL phones launch 4_game.html with same matchId!
+        if (room.meta.status === "IN_MATCH" && room.match && room.match.status === "ACTIVE" && !busy) {
           busy = true;
-          state.syncedDevilId = room.meta.devilId || "";
+          state.matchId = room.match.matchId;
+          state.syncedDevilId = room.match.devilId || "";
           if (room.arenaMap && room.arenaMap.ready) state.arenaMap = room.arenaMap;
-          window.ZP_STATE.save(state);
+          window.ZP_STATE.setActiveSession(state, {
+            roomCode: state.roomCode,
+            roomInstanceId: state.roomInstanceId,
+            matchId: state.matchId,
+            screen: "game"
+          });
           window.location.href = "4_game.html";
         }
       });
@@ -216,32 +244,47 @@
 
     document.getElementById("btn-start").onclick = () => {
       if (busy) return;
+      const activeList = state.players.filter(p => p && p.status !== "LEFT" && p.status !== "EXPIRED");
       if (!state.isHost && window.ZP_SYNC.isEnabled() && !state.demoMode) {
         window.ZP_STATE.showToast("WAITING FOR HOST TO START!");
         return;
       }
-      if (state.players.length < 3) {
-        window.ZP_STATE.showToast("MIN 3 PLAYERS NEEDED — SHARE CODE OR + ADD BOT!");
+      if (activeList.length < 3) {
+        window.ZP_STATE.showToast("MIN 3 PLAYERS NEEDED!");
         return;
       }
       busy = true;
       window.ZP_AUDIO.click();
-      const dIdx = window.ZP_STATE.pickDevilIndex(state.players, state.roleMode || "random");
-      const devilId = state.players[dIdx].id;
-      state.syncedDevilId = devilId;
-      window.ZP_STATE.save(state);
+      const dIdx = window.ZP_STATE.pickDevilIndex(activeList, state.roleMode || "random");
+      const devilId = activeList[dIdx].id;
 
       if (window.ZP_SYNC.isEnabled() && !state.demoMode) {
-        window.ZP_SYNC.startMatchHost(state.roomCode, devilId, state.arenaMap).then(() => {
+        window.ZP_SYNC.startMatchHost(state.roomCode, state.roomInstanceId, state.myId, devilId, state.arenaMap, (ok, res) => {
+          if (!ok) {
+            busy = false;
+            window.ZP_STATE.showToast(res || "COULD NOT START!");
+            return;
+          }
+          state.matchId = res.matchId;
+          state.syncedDevilId = res.devilId;
+          window.ZP_STATE.setActiveSession(state, {
+            roomCode: state.roomCode,
+            roomInstanceId: state.roomInstanceId,
+            matchId: res.matchId,
+            screen: "game"
+          });
           window.location.href = "4_game.html";
         });
       } else {
+        state.matchId = window.ZP_STATE.genUniqueId("m");
+        state.syncedDevilId = devilId;
+        window.ZP_STATE.save(state);
         window.location.href = "4_game.html";
       }
     };
 
     window.addEventListener("pageshow", () => { render(); prebakeMap(); });
-    window.addEventListener("pagehide", () => { window.ZP_SYNC.leaveRoom(); });
+    window.addEventListener("pagehide", () => { window.ZP_SYNC.leaveRoomListener(); });
   </script>
 </body>
 </html>

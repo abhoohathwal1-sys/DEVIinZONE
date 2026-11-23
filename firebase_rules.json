@@ -3,13 +3,49 @@
     "rooms": {
       "$roomCode": {
         ".read": true,
-        ".write": true,
+        ".write": "newData.exists() && (!data.exists() || data.child('meta/status').val() != 'CLOSED' || newData.child('meta/roomInstanceId').val() != data.child('meta/roomInstanceId').val())",
         "meta": {
-          ".validate": "newData.hasChildren(['hostId', 'status', 'durationMin', 'maxPlayers'])"
+          ".validate": "newData.hasChildren(['roomInstanceId', 'hostId', 'status', 'createdAt', 'durationMin', 'maxPlayers'])",
+          "roomInstanceId": {
+            ".validate": "newData.isString() && newData.val().length > 6 && (!data.exists() || data.parent().child('status').val() == 'CLOSED' || newData.val() == data.val())"
+          },
+          "status": {
+            ".validate": "newData.isString() && (newData.val() == 'WAITING' || newData.val() == 'STARTING' || newData.val() == 'IN_MATCH' || newData.val() == 'CLOSED') && (!data.exists() || data.val() != 'CLOSED' || newData.parent().child('roomInstanceId').val() != data.parent().child('roomInstanceId').val())"
+          },
+          "hostId": {
+            ".validate": "newData.isString() && newData.val().length > 0"
+          },
+          "maxPlayers": {
+            ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 8"
+          },
+          "durationMin": {
+            ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 60"
+          }
+        },
+        "match": {
+          ".validate": "!newData.exists() || newData.hasChildren(['matchId', 'roomInstanceId', 'status', 'createdAt'])",
+          "status": {
+            ".validate": "newData.isString() && (newData.val() == 'READY' || newData.val() == 'STARTING' || newData.val() == 'ACTIVE' || newData.val() == 'ENDED' || newData.val() == 'CANCELLED')"
+          },
+          "roomInstanceId": {
+            ".validate": "newData.isString() && newData.val() == newData.parent().parent().child('meta/roomInstanceId').val()"
+          }
         },
         "players": {
           "$playerId": {
-            ".validate": "newData.hasChildren(['name', 'role', 'alive'])"
+            ".validate": "newData.hasChildren(['id', 'name', 'status', 'role', 'alive'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val() == $playerId"
+            },
+            "status": {
+              ".validate": "newData.isString() && (newData.val() == 'LOBBY' || newData.val() == 'PLAYING' || newData.val() == 'DISCONNECTED' || newData.val() == 'LEFT' || newData.val() == 'ELIMINATED' || newData.val() == 'EXPIRED')"
+            },
+            "role": {
+              ".validate": "newData.isString() && (newData.val() == 'pending' || newData.val() == 'devil' || newData.val() == 'hider')"
+            },
+            "alive": {
+              ".validate": "newData.isBoolean()"
+            }
           }
         }
       }
