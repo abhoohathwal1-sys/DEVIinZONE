@@ -82,6 +82,24 @@ window.ZP_AUDIO = (function () {
       beep(340, 0.12, "sawtooth", 0.06, 0);
       beep(210, 0.20, "sawtooth", 0.06, 0.13);
     },
+    zoneLightning() {
+      // Crisp electric crackle + low thunder rumble when zone shrinks/expands/shifts
+      noise(0.14, 0.16);
+      beep(1480, 0.05, "sawtooth", 0.08, 0.02);
+      beep(980, 0.06, "square", 0.07, 0.06);
+      beep(115, 0.38, "sawtooth", 0.10, 0.09);
+      beep(78, 0.45, "triangle", 0.11, 0.16);
+      if (navigator.vibrate) navigator.vibrate([70, 40, 140]);
+    },
+    devilEliminate() {
+      // Dramatic claw slash + horror bass hit when Devil eliminates a Hider
+      noise(0.18, 0.18);
+      beep(880, 0.08, "sawtooth", 0.09, 0);
+      beep(440, 0.12, "sawtooth", 0.09, 0.07);
+      beep(140, 0.42, "square", 0.11, 0.15);
+      beep(92, 0.50, "sawtooth", 0.10, 0.25);
+      if (navigator.vibrate) navigator.vibrate([160, 60, 240]);
+    },
     catchSound() {
       beep(523, 0.08, "square", 0.07, 0);
       beep(659, 0.08, "square", 0.07, 0.08);

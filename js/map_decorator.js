@@ -96,6 +96,60 @@ window.ZP_MAP_DECOR = (function () {
         "line-dasharray": [3, 2]
       }
     });
+
+    // FIX #6: Dense Double-Ring Forest Wall of Pine Trees around the Arena Border!
+    addBorderForestWall(map, lng, lat, cropRadiusMeters);
+  }
+
+  function addBorderForestWall(map, lng, lat, cropRadiusMeters) {
+    loadPropImages(map, () => {
+      const features = [];
+      const cosLat = Math.cos((lat * Math.PI) / 180);
+      // Inner tight ring + outer staggered ring = impenetrable RPG forest boundary!
+      const rings = [
+        { r: cropRadiusMeters - 2, count: 68, offset: 0 },
+        { r: cropRadiusMeters + 14, count: 76, offset: 0.04 }
+      ];
+      rings.forEach((ring, ri) => {
+        const km = ring.r / 1000;
+        const dx = km / (111.320 * cosLat);
+        const dy = km / 110.574;
+        for (let i = 0; i < ring.count; i++) {
+          const th = (i / ring.count) * Math.PI * 2 + ring.offset;
+          const icon = ((i + ri) % 4 === 0) ? "pine_autumn" : "pine_green";
+          features.push({
+            type: "Feature",
+            properties: { icon },
+            geometry: { type: "Point", coordinates: [lng + dx * Math.cos(th), lat + dy * Math.sin(th)] }
+          });
+        }
+      });
+
+      const fc = { type: "FeatureCollection", features };
+      if (map.getSource("arena-border-trees")) {
+        map.getSource("arena-border-trees").setData(fc);
+        return;
+      }
+      map.addSource("arena-border-trees", { type: "geojson", data: fc });
+      map.addLayer({
+        id: "arena-border-trees-layer",
+        type: "symbol",
+        source: "arena-border-trees",
+        layout: {
+          "icon-image": ["get", "icon"],
+          "icon-size": [
+            "interpolate", ["exponential", 2], ["zoom"],
+            15.5, 0.55,
+            17.0, 1.15,
+            18.5, 2.1,
+            19.2, 2.8
+          ],
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
+        }
+      });
+    });
   }
 
   // Load all 6 RPG prop sprites into MapLibre WebGL texture atlas

@@ -180,10 +180,21 @@ window.ZP_SYNC = (function () {
     db.ref(`rooms/${roomCode}/gameState`).set({ ...hostPayload, syncedAt: now }).catch(() => {});
   }
 
-  function pushCatchEvent(roomCode, targetId, reason) {
+  function setPlayerReady(roomCode, playerId, isReady) {
+    if (!enabled || !db) return;
+    db.ref(`rooms/${roomCode}/players/${playerId}/ready`).set(!!isReady).catch(() => {});
+  }
+
+  function pushCatchEvent(roomCode, targetId, reason, victimName, victimSpriteIdx) {
     if (!enabled || !db) return;
     db.ref(`rooms/${roomCode}/players/${targetId}/alive`).set(false).catch(() => {});
-    db.ref(`rooms/${roomCode}/lastEvent`).set({ text: reason, ts: Date.now() }).catch(() => {});
+    db.ref(`rooms/${roomCode}/lastEvent`).set({
+      type: "elim",
+      text: reason,
+      victimName: victimName || "HIDER",
+      victimSpriteIdx: victimSpriteIdx || 0,
+      ts: Date.now()
+    }).catch(() => {});
   }
 
   function pushGhostAlert(roomCode, fromName, x, y) {
@@ -204,6 +215,7 @@ window.ZP_SYNC = (function () {
     leaveRoom,
     pushMyLocation,
     pushHostState,
+    setPlayerReady,
     pushCatchEvent,
     pushGhostAlert
   };
