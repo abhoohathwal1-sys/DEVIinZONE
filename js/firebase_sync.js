@@ -72,6 +72,15 @@ window.ZP_SYNC = (function () {
     }
   }
 
+  function haversineMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const toRad = d => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   function isEligibleHost(p) {
     return p && !p.isBot && (p.status === "LOBBY" || p.status === "PLAYING");
   }
@@ -149,65 +158,85 @@ window.ZP_SYNC = (function () {
   }
 
   // ---------------------------------------------------------
-  // 2. ATOMIC ROOM JOIN (Blocks CLOSED / Full / Started Rooms!)
+  // 2. ATOMIC ROOM JOIN (Fixes false ROOM NOT FOUND + Enforces Zone Check!)
   // ---------------------------------------------------------
-  function joinRoomAsPlayer(roomCode, playerObj, cb) {
+  function joinRoomAsPlayer(roomCode, playerObj, userCoords, cb) {
+    if (typeof userCoords === "function") { cb = userCoords; userCoords = null; }
     if (!enabled || !db) { if (cb) cb(false, "Offline"); return; }
     const ref = db.ref("rooms/" + roomCode);
-    let rejectReason = "";
 
-    ref.transaction(room => {
-      rejectReason = "";
-      if (!room || !room.meta) {
-        rejectReason = "ROOM NOT FOUND!";
+    // Pre-read from server first so Firebase cache is warm & never aborts on initial null!
+    ref.once("value").then(preSnap => {
+      const preRoom = preSnap.val();
+      if (!preRoom || !preRoom.meta) {
+        if (cb) cb(false, "ROOM NOT FOUND!");
         return;
       }
-      if (room.meta.status === "CLOSED") {
-        rejectReason = "ROOM IS CLOSED!";
+      if (preRoom.meta.status === "CLOSED") {
+        if (cb) cb(false, "ROOM IS CLOSED!");
         return;
       }
-      if (room.meta.status !== "WAITING") {
-        // Allow same player to reconnect if they were in this room
-        const existingMe = room.players && room.players[playerObj.id];
-        if (existingMe && (existingMe.status === "DISCONNECTED" || existingMe.status === "PLAYING" || existingMe.status === "ELIMINATED")) {
-          // Handled by reconnect flow
-          rejectReason = "MATCH ALREADY ACTIVE — USE RECONNECT!";
-        } else {
-          rejectReason = "MATCH ALREADY STARTED!";
+      if (preRoom.meta.status !== "WAITING") {
+        if (cb) cb(false, "MATCH ALREADY STARTED!");
+        return;
+      }
+
+      // FIX #4: Only players physically inside the room's zone can join!
+      const am = preRoom.arenaMap;
+      const zoneR = preRoom.meta.startRadius || 150;
+      if (am && typeof am.anchorLat === "number" && typeof am.anchorLng === "number") {
+        if (!userCoords || typeof userCoords.lat !== "number" || typeof userCoords.lng !== "number") {
+          if (cb) cb(false, "GPS ON KARO — ZONE CHECK ZAROORI HAI!");
+          return;
         }
-        return;
+        const distM = Math.round(haversineMeters(userCoords.lat, userCoords.lng, am.anchorLat, am.anchorLng));
+        if (distM > zoneR) {
+          if (cb) cb(false, `ZONE KE BAHAR HO! (${distM}m door, max ${zoneR}m)`);
+          return;
+        }
       }
 
-      if (!room.players) room.players = {};
-      const activeCount = Object.values(room.players).filter(isActiveInRoom).length;
-      const alreadyIn = room.players[playerObj.id] && isActiveInRoom(room.players[playerObj.id]);
-      if (!alreadyIn && activeCount >= (room.meta.maxPlayers || 8)) {
-        rejectReason = "ROOM IS FULL!";
-        return;
-      }
+      let rejectReason = "";
+      ref.transaction(room => {
+        if (room === null) return room; // Wait for server value if cache cleared
+        rejectReason = "";
+        if (!room.meta) { rejectReason = "ROOM NOT FOUND!"; return; }
+        if (room.meta.status === "CLOSED") { rejectReason = "ROOM IS CLOSED!"; return; }
+        if (room.meta.status !== "WAITING") { rejectReason = "MATCH ALREADY STARTED!"; return; }
 
-      const now = nowServer();
-      room.players[playerObj.id] = {
-        id: playerObj.id,
-        name: playerObj.name,
-        isHost: room.meta.hostId === playerObj.id,
-        isBot: false,
-        status: "LOBBY",
-        role: "pending",
-        alive: true,
-        ready: false,
-        catchCode: playerObj.catchCode,
-        spriteIdx: playerObj.spriteIdx || 1,
-        x: 0, y: 0,
-        joinedAt: (room.players[playerObj.id] && room.players[playerObj.id].joinedAt) || now,
-        updatedAt: now
-      };
-      return room;
-    }, (err, committed, snap) => {
-      if (err) { if (cb) cb(false, err.message); return; }
-      if (!committed) { if (cb) cb(false, rejectReason || "COULD NOT JOIN ROOM!"); return; }
-      const val = snap.val();
-      if (cb) cb(true, { roomCode, roomInstanceId: val.meta.roomInstanceId, room: val });
+        if (!room.players) room.players = {};
+        const activeCount = Object.values(room.players).filter(isActiveInRoom).length;
+        const alreadyIn = room.players[playerObj.id] && isActiveInRoom(room.players[playerObj.id]);
+        if (!alreadyIn && activeCount >= (room.meta.maxPlayers || 8)) {
+          rejectReason = "ROOM IS FULL!";
+          return;
+        }
+
+        const now = nowServer();
+        room.players[playerObj.id] = {
+          id: playerObj.id,
+          name: playerObj.name,
+          isHost: room.meta.hostId === playerObj.id,
+          isBot: false,
+          status: "LOBBY",
+          role: "pending",
+          alive: true,
+          ready: false,
+          catchCode: playerObj.catchCode,
+          spriteIdx: playerObj.spriteIdx || 1,
+          x: 0, y: 0,
+          joinedAt: (room.players[playerObj.id] && room.players[playerObj.id].joinedAt) || now,
+          updatedAt: now
+        };
+        return room;
+      }, (err, committed, snap) => {
+        if (err) { if (cb) cb(false, err.message); return; }
+        if (!committed || !snap.val()) { if (cb) cb(false, rejectReason || "COULD NOT JOIN ROOM!"); return; }
+        const val = snap.val();
+        if (cb) cb(true, { roomCode, roomInstanceId: val.meta.roomInstanceId, room: val });
+      });
+    }).catch(err => {
+      if (cb) cb(false, (err && err.message) || "NETWORK ERROR!");
     });
   }
 
@@ -296,23 +325,18 @@ window.ZP_SYNC = (function () {
 
       if (room.meta.hostId === playerId) {
         if (nextHostId) {
+          // Shift host immediately to the next connected player!
           room.meta.hostId = nextHostId;
-          if (room.players[nextHostId]) room.players[nextHostId].isHost = true;
-        } else if (!anyReconnectable) {
-          room.meta.status = "CLOSED";
-          room.meta.closedAt = now;
-          if (room.match && room.match.status === "ACTIVE") {
-            room.match.status = "CANCELLED";
-            room.match.endedAt = now;
+          if (room.players[nextHostId]) {
+            room.players[nextHostId].isHost = true;
+            room.players[nextHostId].ready = true;
           }
+        } else if (!anyReconnectable) {
+          // No host / no players left -> REMOVE room completely from Firebase!
+          return null;
         }
       } else if (!anyReconnectable) {
-        room.meta.status = "CLOSED";
-        room.meta.closedAt = now;
-        if (room.match && room.match.status === "ACTIVE") {
-          room.match.status = "CANCELLED";
-          room.match.endedAt = now;
-        }
+        return null;
       }
 
       return room;
@@ -571,14 +595,20 @@ window.ZP_SYNC = (function () {
         }
       });
 
-      // If host is DISCONNECTED/EXPIRED/LEFT, transfer host to an active connected player
+      // If host is DISCONNECTED/EXPIRED/LEFT, transfer host or remove empty room
       const currentHost = room.players[room.meta.hostId];
       if (!currentHost || !isEligibleHost(currentHost)) {
         const nextHostId = pickNextHostId(room.players, room.meta.hostId);
         if (nextHostId) {
           room.meta.hostId = nextHostId;
           room.players[nextHostId].isHost = true;
+          room.players[nextHostId].ready = true;
           changed = true;
+        } else {
+          const anyLeft = Object.values(room.players).some(
+            p => p && !p.isBot && (p.status === "LOBBY" || p.status === "PLAYING" || p.status === "DISCONNECTED")
+          );
+          if (!anyLeft) return null;
         }
       }
 
