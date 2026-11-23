@@ -1,6 +1,7 @@
-/* Shared State (v7 Launch-Ready: 3-8 Players, Real Play Default + Demo Toggle) */
+/* Shared State (v10 — Authoritative Room/Match Session + Persistent Player ID) */
 window.ZP_STATE = (function () {
-  const KEY = "hathwal_devilinzone_v8";
+  const KEY = "hathwal_devilinzone_v10";
+  const PID_KEY = "hathwal_devilinzone_pid_v1";
   const BOT_NAMES = ["VIKRAM", "SHADOW", "KABIR", "GHOST", "RAVI", "ZOYA", "AARAV", "MAYA"];
 
   function randCode(len = 4) {
@@ -9,21 +10,44 @@ window.ZP_STATE = (function () {
     return s;
   }
 
+  function genUniqueId(prefix = "id") {
+    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  // Strictly persistent per-device Player ID so reloads/reconnections NEVER duplicate players
+  function getOrCreatePlayerId() {
+    try {
+      let pid = window.localStorage.getItem(PID_KEY);
+      if (pid && pid.length > 4) return pid;
+      pid = genUniqueId("p");
+      window.localStorage.setItem(PID_KEY, pid);
+      return pid;
+    } catch (e) {
+      return genUniqueId("p");
+    }
+  }
+
   function defaultState() {
+    const pid = getOrCreatePlayerId();
     return {
       playerName: "PLAYER1",
-      myId: "p_" + randCode(4),
+      myId: pid,
       mySpriteIdx: 0,
-      roomCode: randCode(4),
-      isHost: true,
-      demoMode: false,        // REAL PLAY by default; small Demo button enables bots!
-      fastTimers: false,      // Real play timers by default (Demo mode turns fastTimers on)
-      roleMode: "random",     // 100% fair random Devil
-      maxPlayers: 5,          // Flexible: 3 to 8 players! (Checklist #6)
-      durationMin: 15,        // Selectable: 10, 15, 30, 40 min! (Checklist #6)
+      roomCode: "",
+      roomInstanceId: "",
+      matchId: "",
+      syncedDevilId: "",
+      isHost: false,
+      demoMode: false,
+      fastTimers: false,
+      roleMode: "random",
+      maxPlayers: 5,
+      durationMin: 15,
       startRadius: 150,
       minRadius: 85,
       maxRadius: 300,
+      // Active reconnectable session (cleared ONLY on intentional leave, match end, or expiry)
+      activeSession: null, // { roomCode, roomInstanceId, matchId, playerId, screen, updatedAt }
       arenaMap: {
         ready: false,
         anchorLat: 28.6139,
@@ -33,29 +57,42 @@ window.ZP_STATE = (function () {
         propCandidates: []
       },
       players: [
-        { id: "me", name: "PLAYER1", isBot: false, isHost: true, role: "pending", catchCode: randCode(4), spriteIdx: 0 }
+        {
+          id: pid,
+          name: "PLAYER1",
+          isSelf: true,
+          isBot: false,
+          isHost: true,
+          status: "LOBBY",
+          role: "pending",
+          alive: true,
+          ready: true,
+          catchCode: randCode(4),
+          spriteIdx: 0
+        }
       ]
     };
   }
 
   function readRaw() {
     try { const ls = window.localStorage.getItem(KEY); if (ls) return ls; } catch (e) {}
-    try { if (window.name && window.name.indexOf("DIZ8:") === 0) return window.name.slice(4); } catch (e) {}
+    try { if (window.name && window.name.indexOf("DIZ10:") === 0) return window.name.slice(6); } catch (e) {}
     return null;
   }
 
   function writeRaw(str) {
     try { window.localStorage.setItem(KEY, str); } catch (e) {}
-    try { window.name = "DIZ8:" + str; } catch (e) {}
+    try { window.name = "DIZ10:" + str; } catch (e) {}
   }
 
   function load() {
     try {
       const raw = readRaw();
-      if (!raw) return defaultState();
-      const parsed = JSON.parse(raw);
       const base = defaultState();
+      if (!raw) return base;
+      const parsed = JSON.parse(raw);
       const merged = Object.assign(base, parsed);
+      merged.myId = getOrCreatePlayerId();
       merged.arenaMap = Object.assign(base.arenaMap, parsed.arenaMap || {});
       return merged;
     } catch (e) {
@@ -68,6 +105,28 @@ window.ZP_STATE = (function () {
     return state;
   }
 
+  function setActiveSession(state, info) {
+    state.activeSession = info ? {
+      roomCode: info.roomCode || state.roomCode,
+      roomInstanceId: info.roomInstanceId || state.roomInstanceId,
+      matchId: info.matchId || state.matchId || "",
+      playerId: state.myId,
+      screen: info.screen || "game",
+      updatedAt: Date.now()
+    } : null;
+    return save(state);
+  }
+
+  function clearActiveSession(state) {
+    state.activeSession = null;
+    state.roomCode = "";
+    state.roomInstanceId = "";
+    state.matchId = "";
+    state.syncedDevilId = "";
+    state.isHost = false;
+    return save(state);
+  }
+
   function createBot(existing) {
     const used = new Set(existing.map(p => p.name));
     const avail = BOT_NAMES.filter(n => !used.has(n));
@@ -77,7 +136,10 @@ window.ZP_STATE = (function () {
       name,
       isBot: true,
       isHost: false,
+      status: "LOBBY",
       role: "pending",
+      alive: true,
+      ready: true,
       catchCode: randCode(4),
       spriteIdx: existing.length % 6
     };
@@ -152,8 +214,21 @@ window.ZP_STATE = (function () {
     el.textContent = msg;
     el.classList.add("show");
     clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove("show"), 2300);
+    el._t = setTimeout(() => el.classList.remove("show"), 2500);
   }
 
-  return { load, save, randCode, createBot, fillBotsToTarget, pickDevilIndex, prebakeArenaProps, showToast };
+  return {
+    load,
+    save,
+    randCode,
+    genUniqueId,
+    getOrCreatePlayerId,
+    setActiveSession,
+    clearActiveSession,
+    createBot,
+    fillBotsToTarget,
+    pickDevilIndex,
+    prebakeArenaProps,
+    showToast
+  };
 })();
